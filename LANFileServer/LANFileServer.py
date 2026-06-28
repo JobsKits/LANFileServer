@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import errno
 import html
+import ipaddress
 import json
 import mimetypes
 import os
@@ -106,6 +107,36 @@ HTTP 状态码
 404：请求的文件或路径不存在。
 500：服务器内部发生错误。
 """.strip()
+TEXT_FILE_EXTENSIONS = {
+    ".bat",
+    ".c",
+    ".command",
+    ".conf",
+    ".cpp",
+    ".css",
+    ".csv",
+    ".dart",
+    ".h",
+    ".hpp",
+    ".html",
+    ".ini",
+    ".java",
+    ".js",
+    ".json",
+    ".log",
+    ".m",
+    ".md",
+    ".mm",
+    ".py",
+    ".rb",
+    ".sh",
+    ".swift",
+    ".toml",
+    ".txt",
+    ".xml",
+    ".yaml",
+    ".yml",
+}
 
 
 @dataclass
@@ -159,7 +190,31 @@ def get_lan_ips() -> list[str]:
         sock.close()
     except OSError:
         pass
-    return sorted(ips) or ["127.0.0.1"]
+    sorted_ips = sorted(ips, key=lan_ip_sort_key)
+    usable_ips = [ip for ip in sorted_ips if not is_link_local_ip(ip)]
+    return usable_ips or sorted_ips or ["127.0.0.1"]
+
+
+def is_link_local_ip(ip: str) -> bool:
+    try:
+        return ipaddress.ip_address(ip).is_link_local
+    except ValueError:
+        return False
+
+
+def lan_ip_sort_key(ip: str) -> tuple[int, int]:
+    try:
+        address = ipaddress.ip_address(ip)
+    except ValueError:
+        return (9, 0)
+    value = int(address)
+    if address.is_loopback:
+        return (8, value)
+    if address.is_link_local:
+        return (6, value)
+    if address.is_private:
+        return (0, value)
+    return (4, value)
 
 
 def compact_location_parts(*values: object) -> str:
@@ -250,6 +305,8 @@ def page(title: str, body: str) -> bytes:
     th, td {{ padding: 9px 8px; border-bottom: 1px solid #e5e7eb; text-align: left; }}
     th {{ background: #f8fafc; }}
     .hint {{ color: #64748b; }}
+    .actions {{ width: 90px; white-space: nowrap; }}
+    .download-link {{ font-size: 13px; }}
   </style>
 </head>
 <body>{body}</body>
@@ -262,6 +319,27 @@ def safe_child(child: Path, parent: Path) -> bool:
         return True
     except ValueError:
         return False
+
+
+def file_content_type(file_path: Path) -> str:
+    content_type = mimetypes.guess_type(file_path.name)[0]
+    if not content_type and file_path.suffix.lower() in TEXT_FILE_EXTENSIONS:
+        content_type = "text/plain"
+    if content_type and content_type.startswith("text/") and "charset=" not in content_type.lower():
+        return f"{content_type}; charset=utf-8"
+    return content_type or "application/octet-stream"
+
+
+def content_disposition(disposition: str, filename: str) -> str:
+    fallback = re.sub(r"[^A-Za-z0-9._ -]+", "_", filename).strip() or "download"
+    fallback = fallback.replace("\\", "_").replace('"', "'")
+    encoded = urllib.parse.quote(filename)
+    return f'{disposition}; filename="{fallback}"; filename*=UTF-8\'\'{encoded}'
+
+
+def is_download_query(query: str) -> bool:
+    values = urllib.parse.parse_qs(query).get("download", [])
+    return any(value.lower() in {"1", "true", "yes", "on"} for value in values)
 
 
 class ShareHandler(BaseHTTPRequestHandler):
@@ -312,7 +390,7 @@ class ShareHandler(BaseHTTPRequestHandler):
             if extra:
                 self.send_error(404, "Not Found")
             else:
-                self.send_file(item.path, send_body)
+                self.send_file(item.path, send_body, is_download_query(parsed.query))
             return
         if extra is None:
             self.send_response(302)
@@ -325,7 +403,7 @@ class ShareHandler(BaseHTTPRequestHandler):
         elif target.is_dir():
             self.send_directory(item, target, parsed.path, send_body)
         elif target.is_file():
-            self.send_file(target, send_body)
+            self.send_file(target, send_body, is_download_query(parsed.query))
         else:
             self.send_error(404, "Not Found")
 
@@ -334,13 +412,14 @@ class ShareHandler(BaseHTTPRequestHandler):
         rows = []
         for item in manager.items:
             href = f"/items/{item.item_id}/" if item.path.is_dir() else f"/items/{item.item_id}"
+            download_link = f"<a class=\"download-link\" href=\"{href}?download=1\" download>下载</a>" if item.path.is_file() else ""
             rows.append(
                 f"<tr><td>{item.item_id}</td><td><a href=\"{href}\">{html.escape(item.name)}</a></td>"
-                f"<td>{html.escape(item.kind)}</td><td>{html.escape(str(item.path))}</td></tr>"
+                f"<td>{html.escape(item.kind)}</td><td>{download_link}</td><td>{html.escape(str(item.path))}</td></tr>"
             )
         body = (
-            "<h1>LANFileServer</h1><p class=\"hint\">同一局域网设备可访问本页下载文件。</p>"
-            "<table><thead><tr><th>ID</th><th>名称</th><th>类型</th><th>本机路径</th></tr></thead>"
+            "<h1>LANFileServer</h1><p class=\"hint\">同一局域网设备可访问本页查看或下载文件。</p>"
+            "<table><thead><tr><th>ID</th><th>名称</th><th>类型</th><th class=\"actions\">操作</th><th>本机路径</th></tr></thead>"
             f"<tbody>{''.join(rows)}</tbody></table>"
         )
         self.send_bytes(200, page("LANFileServer", body), "text/html; charset=utf-8", send_body)
@@ -358,24 +437,29 @@ class ShareHandler(BaseHTTPRequestHandler):
             return
         rows = []
         if directory.resolve() != item.path.resolve():
-            rows.append('<tr><td><a href="../">../</a></td><td>文件夹</td><td></td></tr>')
+            rows.append('<tr><td><a href="../">../</a></td><td>文件夹</td><td></td><td></td></tr>')
         for child in children:
             name = child.name + ("/" if child.is_dir() else "")
             href = urllib.parse.quote(child.name) + ("/" if child.is_dir() else "")
             size = "" if child.is_dir() else f"{child.stat().st_size:,} B"
-            rows.append(f"<tr><td><a href=\"{href}\">{html.escape(name)}</a></td><td>{'文件夹' if child.is_dir() else '文件'}</td><td>{size}</td></tr>")
+            download_link = f"<a class=\"download-link\" href=\"{href}?download=1\" download>下载</a>" if child.is_file() else ""
+            rows.append(
+                f"<tr><td><a href=\"{href}\">{html.escape(name)}</a></td>"
+                f"<td>{'文件夹' if child.is_dir() else '文件'}</td><td>{size}</td><td>{download_link}</td></tr>"
+            )
         title = item.name if directory.resolve() == item.path.resolve() else f"{item.name}/{directory.resolve().relative_to(item.path.resolve())}"
-        body = f"<h1>{html.escape(title)}</h1><p class=\"hint\">目录浏览已开启。</p><table><thead><tr><th>名称</th><th>类型</th><th>大小</th></tr></thead><tbody>{''.join(rows)}</tbody></table>"
+        body = f"<h1>{html.escape(title)}</h1><p class=\"hint\">点击文件名直接查看，下载请点右侧操作。</p><table><thead><tr><th>名称</th><th>类型</th><th>大小</th><th class=\"actions\">操作</th></tr></thead><tbody>{''.join(rows)}</tbody></table>"
         self.send_bytes(200, page(title, body), "text/html; charset=utf-8", send_body)
 
-    def send_file(self, file_path: Path, send_body: bool) -> None:
+    def send_file(self, file_path: Path, send_body: bool, download: bool) -> None:
         try:
             stat = file_path.stat()
-            content_type = mimetypes.guess_type(file_path.name)[0] or "application/octet-stream"
+            disposition = "attachment" if download else "inline"
             self.send_response(200)
-            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Type", file_content_type(file_path))
             self.send_header("Content-Length", str(stat.st_size))
             self.send_header("Last-Modified", self.date_time_string(stat.st_mtime))
+            self.send_header("Content-Disposition", content_disposition(disposition, file_path.name))
             self.end_headers()
             if send_body:
                 with file_path.open("rb") as source:
@@ -463,7 +547,7 @@ class NginxShareServer:
         config_path = self.runtime_dir / "nginx.conf"
         (www_dir / "index.html").write_text(self.index_html(items), encoding="utf-8")
         config_path.write_text(
-            self.config_text(items, port, www_dir, self.access_log, logs_dir / "error.log", python_backend_port),
+            self.config_text(items, port, www_dir, self.access_log, logs_dir / "error.log", python_backend_port, self.find_mime_types(nginx)),
             encoding="utf-8",
         )
         self.process = subprocess.Popen([nginx, "-p", str(self.runtime_dir), "-c", str(config_path)], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
@@ -560,6 +644,22 @@ class NginxShareServer:
         return None
 
     @staticmethod
+    def find_mime_types(nginx_path: str) -> Optional[Path]:
+        nginx_file = Path(nginx_path).resolve()
+        candidates = [
+            nginx_file.parent.parent / "conf" / "mime.types",
+            nginx_file.parent / "conf" / "mime.types",
+            Path("/opt/homebrew/etc/nginx/mime.types"),
+            Path("/usr/local/etc/nginx/mime.types"),
+            Path("/etc/nginx/mime.types"),
+            Path(r"C:\nginx\conf\mime.types"),
+        ]
+        for candidate in candidates:
+            if candidate.is_file():
+                return candidate
+        return None
+
+    @staticmethod
     def find_brew() -> Optional[str]:
         for candidate in [shutil.which("brew"), "/opt/homebrew/bin/brew", "/usr/local/bin/brew"]:
             if candidate and Path(candidate).is_file():
@@ -629,6 +729,7 @@ class NginxShareServer:
         access_log: Path,
         error_log: Path,
         python_backend_port: Optional[int] = None,
+        mime_types: Optional[Path] = None,
     ) -> str:
         locations = []
         for item in items:
@@ -661,6 +762,7 @@ class NginxShareServer:
             autoindex on;
             autoindex_exact_size off;
             autoindex_localtime on;
+            add_header Content-Disposition $jobs_content_disposition always;
         }}
 """
                 )
@@ -669,16 +771,24 @@ class NginxShareServer:
                     f"""
         location = /items/{item.item_id} {{
             alias "{self.nginx_path(item.path)}";
-            default_type application/octet-stream;
+            add_header Content-Disposition $jobs_content_disposition always;
         }}
 """
                 )
+        mime_types_include = f'    include "{self.nginx_path(mime_types)}";\n' if mime_types else ""
         return f"""
 daemon off;
 worker_processes 1;
 pid "{self.nginx_path(self.runtime_dir / "nginx.pid")}";
 events {{ worker_connections 1024; }}
 http {{
+{mime_types_include}    map $arg_download $jobs_content_disposition {{
+        default "inline";
+        1 "attachment";
+        true "attachment";
+        yes "attachment";
+        on "attachment";
+    }}
     default_type application/octet-stream;
     log_format jobs_main '$remote_addr|$time_local|$request|$status|$body_bytes_sent|$http_user_agent';
     access_log "{self.nginx_path(access_log)}" jobs_main;
@@ -707,13 +817,14 @@ http {{
         for item in items:
             href = f"/items/{item.item_id}/" if item.path.is_dir() else f"/items/{item.item_id}"
             mode = "Python 临时" if item.temporary else "Nginx"
+            download_link = f"<a class=\"download-link\" href=\"{href}?download=1\" download>下载</a>" if item.path.is_file() else ""
             rows.append(
                 f"<tr><td>{item.item_id}</td><td><a href=\"{href}\">{html.escape(item.name)}</a></td>"
-                f"<td>{html.escape(item.kind)}</td><td>{mode}</td><td>{html.escape(str(item.path))}</td></tr>"
+                f"<td>{html.escape(item.kind)}</td><td>{mode}</td><td>{download_link}</td><td>{html.escape(str(item.path))}</td></tr>"
             )
         body = (
             "<h1>LANFileServer</h1><p class=\"hint\">每个共享项目使用各自选择的服务模式。</p>"
-            "<table><thead><tr><th>ID</th><th>名称</th><th>类型</th><th>模式</th><th>本机路径</th></tr></thead>"
+            "<table><thead><tr><th>ID</th><th>名称</th><th>类型</th><th>模式</th><th class=\"actions\">操作</th><th>本机路径</th></tr></thead>"
             f"<tbody>{''.join(rows)}</tbody></table>"
         )
         return page("LANFileServer", body).decode("utf-8")
@@ -1487,6 +1598,8 @@ class MainWindow(QMainWindow):
         self.access_header.setSectionResizeMode(7, QHeaderView.Stretch)
         self.access_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.access_table.setAlternatingRowColors(True)
+        self.access_table.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.access_table.customContextMenuRequested.connect(self.open_access_context_menu)
         self.access_placeholder = QLabel("启动服务以后查看", self.access_table.viewport())
         self.access_placeholder.setObjectName("accessPlaceholder")
         self.access_placeholder.setAlignment(Qt.AlignCenter)
@@ -1638,6 +1751,19 @@ class MainWindow(QMainWindow):
             self.show_item_in_finder(item_id)
         elif selected_action == remove_action:
             self.remove_selected()
+
+    def open_access_context_menu(self, position: QPoint) -> None:
+        menu = QMenu(self)
+        clear_action = menu.addAction("清除记录")
+        clear_action.setEnabled(self.access_table.rowCount() > 0)
+        selected_action = menu.exec(self.access_table.viewport().mapToGlobal(position))
+        if selected_action == clear_action:
+            self.clear_access_records()
+
+    def clear_access_records(self) -> None:
+        self.access_table.setRowCount(0)
+        self.refresh_access_placeholder()
+        self.show_toast("访问记录已清除")
 
     def reorder_items(self, item_order: list[int]) -> None:
         items_by_id = {item.item_id: item for item in self.items}

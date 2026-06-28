@@ -2,7 +2,7 @@
 
 
 a = Analysis(
-    ['/Users/jobs/Desktop/1/LANFileServer/LANFileServer.py'],
+    ['/Users/jobs/Documents/Github/JobsGenesis/JobsPythonTools.py/LANFileServer.py/LANFileServer/LANFileServer.py'],
     pathex=[],
     binaries=[],
     datas=[],
