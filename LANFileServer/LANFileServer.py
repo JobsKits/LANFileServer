@@ -22,10 +22,12 @@ import signal
 import socket
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import urllib.parse
 import urllib.request
+import zipfile
 from dataclasses import dataclass
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -69,6 +71,10 @@ except ImportError as error:
 APP_NAME = "LANFileServer"
 APP_DIR = Path.home() / ".lan_file_server"
 INTERNAL_ITEM_MIME = "application/x-lanfileserver-item-id"
+UPLOAD_DIR_NAME = "Uploads"
+UPLOAD_MAX_BYTES = 512 * 1024 * 1024
+UPLOAD_CHUNK_SIZE = 1024 * 1024
+PREVIEW_MAX_BYTES = 2 * 1024 * 1024
 HELP_TEXT = """
 每个文件 / 文件夹都可以独立选择模式。
 
@@ -144,6 +150,7 @@ class ShareItem:
     item_id: int
     path: Path
     temporary: bool = True
+    upload_allowed: bool = False
     running: bool = False
 
     @property
@@ -305,9 +312,174 @@ def page(title: str, body: str) -> bytes:
     th, td {{ padding: 9px 8px; border-bottom: 1px solid #e5e7eb; text-align: left; }}
     th {{ background: #f8fafc; }}
     .hint {{ color: #64748b; }}
-    .actions {{ width: 90px; white-space: nowrap; }}
-    .download-link {{ font-size: 13px; }}
+    .actions {{ width: 138px; white-space: nowrap; }}
+    .action-link {{ display: inline-block; margin-right: 10px; font-size: 13px; }}
+    .primary-actions {{ display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 16px 0; }}
+    .primary-actions a {{ padding: 7px 14px; border: 1px solid #cbd5e1; background: #f8fafc; }}
+    .preview-box {{ margin-top: 16px; }}
+    .preview-box img, .preview-box video {{ max-width: 100%; height: auto; }}
+    .preview-box iframe {{ width: 100%; height: 78vh; border: 1px solid #e5e7eb; }}
+    pre {{ white-space: pre-wrap; word-break: break-word; padding: 14px; background: #0f172a; color: #e2e8f0; overflow: auto; }}
+    .upload-panel {{ margin: 18px 0 8px; }}
+    .upload-drop {{ min-height: 150px; padding: 18px; border: 2px dashed #94a3b8; background: #f8fafc; display: flex; align-items: center; justify-content: center; text-align: center; }}
+    .upload-drop.dragging {{ border-color: #0369a1; background: #e0f2fe; }}
+    .upload-panel form {{ display: flex; gap: 10px; align-items: center; justify-content: center; flex-wrap: wrap; margin: 10px 0; }}
+    .upload-panel button {{ padding: 6px 14px; cursor: pointer; }}
+    .upload-panel button:disabled {{ cursor: not-allowed; opacity: 0.5; }}
+    .upload-list {{ margin: 8px auto 0; padding-left: 20px; max-width: 720px; max-height: 120px; overflow: auto; text-align: left; }}
+    .upload-status {{ margin: 8px 0 0; color: #475569; }}
   </style>
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {{
+      document.querySelectorAll("[data-upload-panel]").forEach(setupUploadPanel);
+    }});
+
+    function setupUploadPanel(panel) {{
+      const form = panel.querySelector("[data-upload-url]");
+      const dropZone = panel.querySelector("[data-upload-drop]");
+      const fileInput = panel.querySelector("[data-file-input]");
+      const folderInput = panel.querySelector("[data-folder-input]");
+      const chooseFiles = panel.querySelector("[data-choose-files]");
+      const chooseFolder = panel.querySelector("[data-choose-folder]");
+      const uploadButton = panel.querySelector("[data-upload-button]");
+      const status = panel.querySelector(".upload-status");
+      const list = panel.querySelector(".upload-list");
+      let pendingFiles = [];
+
+      const uploadPath = (file) => file.uploadPath || file.webkitRelativePath || file.name;
+      const setStatus = (text) => {{ status.textContent = text; }};
+      const refreshList = () => {{
+        uploadButton.disabled = pendingFiles.length === 0;
+        list.innerHTML = "";
+        pendingFiles.slice(0, 60).forEach((file) => {{
+          const item = document.createElement("li");
+          item.textContent = uploadPath(file);
+          list.appendChild(item);
+        }});
+        if (pendingFiles.length > 60) {{
+          const item = document.createElement("li");
+          item.textContent = `另外还有 ${{pendingFiles.length - 60}} 个文件...`;
+          list.appendChild(item);
+        }}
+      }};
+      const addFiles = (files) => {{
+        pendingFiles = pendingFiles.concat(files.filter(Boolean));
+        setStatus(pendingFiles.length ? `已选择 ${{pendingFiles.length}} 个文件，确认后再上传。` : "没有可上传的文件。");
+        refreshList();
+      }};
+      const uploadPending = async () => {{
+        if (!pendingFiles.length) {{
+          setStatus("请先选择文件或文件夹。");
+          return;
+        }}
+        uploadButton.disabled = true;
+        try {{
+          for (const file of pendingFiles) {{
+            const path = uploadPath(file);
+            setStatus(`正在上传：${{path}}`);
+            const url = `${{form.dataset.uploadUrl}}?path=${{encodeURIComponent(path)}}`;
+            const response = await fetch(url, {{
+              method: "POST",
+              headers: {{ "Content-Type": file.type || "application/octet-stream" }},
+              body: file
+            }});
+            if (!response.ok) {{
+              const text = await response.text();
+              throw new Error(text || `上传失败：${{response.status}}`);
+            }}
+          }}
+          setStatus("上传完成。");
+          pendingFiles = [];
+          refreshList();
+          window.location.href = form.dataset.nextUrl;
+        }} catch (error) {{
+          setStatus(error.message || "上传失败。");
+          refreshList();
+        }}
+      }};
+
+      chooseFiles.addEventListener("click", () => fileInput.click());
+      chooseFolder.addEventListener("click", () => folderInput.click());
+      fileInput.addEventListener("change", () => {{
+        addFiles(Array.from(fileInput.files));
+        fileInput.value = "";
+      }});
+      folderInput.addEventListener("change", () => {{
+        addFiles(Array.from(folderInput.files));
+        folderInput.value = "";
+      }});
+      form.addEventListener("submit", (event) => {{
+        event.preventDefault();
+        uploadPending();
+      }});
+      ["dragenter", "dragover"].forEach((type) => {{
+        dropZone.addEventListener(type, (event) => {{
+          event.preventDefault();
+          dropZone.classList.add("dragging");
+        }});
+      }});
+      ["dragleave", "drop"].forEach((type) => {{
+        dropZone.addEventListener(type, () => dropZone.classList.remove("dragging"));
+      }});
+      dropZone.addEventListener("drop", async (event) => {{
+        event.preventDefault();
+        const files = await collectDroppedFiles(event.dataTransfer);
+        addFiles(files);
+        if (files.length && window.confirm(`已拖入 ${{files.length}} 个文件，是否现在上传？`)) {{
+          uploadPending();
+        }}
+      }});
+      refreshList();
+    }}
+
+    async function collectDroppedFiles(dataTransfer) {{
+      const items = Array.from(dataTransfer.items || []);
+      if (!items.length) return Array.from(dataTransfer.files || []);
+      const files = [];
+      for (const item of items) {{
+        const entry = item.webkitGetAsEntry ? item.webkitGetAsEntry() : null;
+        if (entry) {{
+          files.push(...await traverseEntry(entry, ""));
+        }} else {{
+          const file = item.getAsFile && item.getAsFile();
+          if (file) files.push(file);
+        }}
+      }}
+      return files;
+    }}
+
+    function traverseEntry(entry, prefix) {{
+      return new Promise((resolve) => {{
+        const entryPath = `${{prefix}}${{entry.name}}`;
+        if (entry.isFile) {{
+          entry.file((file) => {{
+            file.uploadPath = entryPath;
+            resolve([file]);
+          }}, () => resolve([]));
+          return;
+        }}
+        if (!entry.isDirectory) {{
+          resolve([]);
+          return;
+        }}
+        const reader = entry.createReader();
+        const results = [];
+        const readBatch = () => {{
+          reader.readEntries(async (entries) => {{
+            if (!entries.length) {{
+              resolve(results);
+              return;
+            }}
+            for (const child of entries) {{
+              results.push(...await traverseEntry(child, `${{entryPath}}/`));
+            }}
+            readBatch();
+          }}, () => resolve(results));
+        }};
+        readBatch();
+      }});
+    }}
+  </script>
 </head>
 <body>{body}</body>
 </html>""".encode("utf-8")
@@ -337,9 +509,107 @@ def content_disposition(disposition: str, filename: str) -> str:
     return f'{disposition}; filename="{fallback}"; filename*=UTF-8\'\'{encoded}'
 
 
-def is_download_query(query: str) -> bool:
-    values = urllib.parse.parse_qs(query).get("download", [])
-    return any(value.lower() in {"1", "true", "yes", "on"} for value in values)
+def item_allows_upload(item: ShareItem) -> bool:
+    return item.upload_allowed and item.path.is_dir()
+
+
+def item_uses_python_backend(item: ShareItem) -> bool:
+    return True
+
+
+def client_ip_from_handler(handler: BaseHTTPRequestHandler) -> str:
+    return handler.headers.get("X-Real-IP") or handler.client_address[0]
+
+
+def human_size(size: int) -> str:
+    value = float(size)
+    for unit in ["B", "KB", "MB", "GB"]:
+        if value < 1024 or unit == "GB":
+            return f"{value:.1f} {unit}" if unit != "B" else f"{int(value)} B"
+        value /= 1024
+    return f"{size} B"
+
+
+def sanitize_upload_filename(filename: str) -> str:
+    name = urllib.parse.unquote(filename or "").strip()
+    name = re.split(r"[\\/]+", name)[-1]
+    name = re.sub(r'[<>:"/\\|?*\x00-\x1f]+', "_", name).strip()
+    if name in {"", ".", ".."}:
+        return "upload.bin"
+    return name[:180]
+
+
+def sanitize_upload_path_part(part: str) -> str:
+    name = urllib.parse.unquote(part or "").strip()
+    name = re.sub(r'[<>:"/\\|?*\x00-\x1f]+', "_", name).strip()
+    if name in {"", ".", ".."}:
+        return ""
+    return name[:120]
+
+
+def sanitize_upload_relative_path(value: str) -> Path:
+    raw_parts = urllib.parse.unquote(value or "").replace("\\", "/").split("/")
+    parts = [part for part in (sanitize_upload_path_part(raw_part) for raw_part in raw_parts) if part]
+    if not parts:
+        return Path("upload.bin")
+    return Path(*parts)
+
+
+def unique_upload_path(upload_dir: Path, filename: str) -> Path:
+    target = upload_dir / filename
+    if not target.exists():
+        return target
+    stem = target.stem or "upload"
+    suffix = target.suffix
+    for index in range(1, 10000):
+        candidate = upload_dir / f"{stem} ({index}){suffix}"
+        if not candidate.exists():
+            return candidate
+    raise RuntimeError("同名文件过多，无法生成安全文件名。")
+
+
+def quote_path(path: Path) -> str:
+    return "/".join(urllib.parse.quote(part) for part in path.parts)
+
+
+def is_text_preview(file_path: Path, content_type: str) -> bool:
+    return content_type.startswith("text/") or file_path.suffix.lower() in TEXT_FILE_EXTENSIONS
+
+
+def archive_download_name(source: Path) -> str:
+    name = sanitize_upload_filename(source.name or "download")
+    return f"{name}.zip"
+
+
+def build_path_archive(source: Path) -> Path:
+    temp_file = tempfile.NamedTemporaryFile("wb", delete=False, suffix=".zip")
+    temp_path = Path(temp_file.name)
+    temp_file.close()
+    try:
+        with zipfile.ZipFile(temp_path, "w", zipfile.ZIP_DEFLATED) as archive:
+            if source.is_symlink():
+                raise RuntimeError("不打包符号链接。")
+            if source.is_file():
+                archive.write(source, sanitize_upload_filename(source.name))
+            else:
+                root_name = sanitize_upload_filename(source.name or "folder")
+                archive.writestr(f"{root_name}/", b"")
+                for child in sorted(source.rglob("*"), key=lambda path: str(path).lower()):
+                    if child.is_symlink() or not safe_child(child, source):
+                        continue
+                    relative = child.relative_to(source)
+                    archive_name = str(Path(root_name) / relative).replace("\\", "/")
+                    if child.is_dir():
+                        archive.write(child, archive_name.rstrip("/") + "/")
+                    elif child.is_file():
+                        archive.write(child, archive_name)
+    except Exception:
+        try:
+            temp_path.unlink()
+        except OSError:
+            pass
+        raise
+    return temp_path
 
 
 class ShareHandler(BaseHTTPRequestHandler):
@@ -351,12 +621,18 @@ class ShareHandler(BaseHTTPRequestHandler):
     def do_HEAD(self) -> None:
         self.serve_request(False)
 
+    def do_POST(self) -> None:
+        self.handle_upload()
+
     def log_message(self, fmt: str, *args: object) -> None:
         return
 
     def log_request(self, code: int | str = "-", size: int | str = "-") -> None:
+        parsed = urllib.parse.urlsplit(self.path)
+        if re.match(r"^/items/\d+/__upload$", parsed.path):
+            return
         manager = getattr(self.server, "manager", None)
-        if manager:
+        if manager and manager.record_requests:
             manager.record(self, str(code), str(size))
 
     def send_bytes(self, status: int, body: bytes, content_type: str, send_body: bool) -> None:
@@ -366,6 +642,16 @@ class ShareHandler(BaseHTTPRequestHandler):
         self.end_headers()
         if send_body:
             self.wfile.write(body)
+
+    def send_json(self, status: int, payload: dict[str, object], headers: Optional[dict[str, str]] = None) -> None:
+        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        for key, value in (headers or {}).items():
+            self.send_header(key, value)
+        self.end_headers()
+        self.wfile.write(body)
 
     def serve_request(self, send_body: bool) -> None:
         parsed = urllib.parse.urlsplit(self.path)
@@ -387,32 +673,71 @@ class ShareHandler(BaseHTTPRequestHandler):
             return
         extra = match.group(2)
         if item.path.is_file():
-            if extra:
+            if extra == "__preview":
+                self.send_file(item.path, send_body, False)
+            elif extra == "__download":
+                self.send_path_archive(item.path, send_body)
+            elif extra:
                 self.send_error(404, "Not Found")
             else:
-                self.send_file(item.path, send_body, is_download_query(parsed.query))
+                self.send_file_page(item, item.path, "", send_body)
             return
         if extra is None:
             self.send_response(302)
             self.send_header("Location", f"/items/{item.item_id}/")
             self.end_headers()
             return
-        target = item.path.joinpath(*[part for part in urllib.parse.unquote(extra).split("/") if part])
+        parts = [part for part in urllib.parse.unquote(extra).split("/") if part]
+        action = parts[-1] if parts and parts[-1] in {"__preview", "__download"} else ""
+        target_parts = parts[:-1] if action else parts
+        target = item.path.joinpath(*target_parts)
         if not safe_child(target, item.path):
             self.send_error(403, "Forbidden")
+        elif action == "__preview" and target.is_file():
+            self.send_file(target, send_body, False)
+        elif action == "__download" and (target.is_file() or target.is_dir()):
+            self.send_path_archive(target, send_body)
+        elif action:
+            self.send_error(404, "Not Found")
         elif target.is_dir():
             self.send_directory(item, target, parsed.path, send_body)
         elif target.is_file():
-            self.send_file(target, send_body, is_download_query(parsed.query))
+            self.send_file_page(item, target, quote_path(Path(*target_parts)), send_body)
         else:
             self.send_error(404, "Not Found")
+
+    def upload_panel(self, item: ShareItem) -> str:
+        if not item_allows_upload(item):
+            return ""
+        action = f"/items/{item.item_id}/__upload"
+        next_url = f"/items/{item.item_id}/{urllib.parse.quote(UPLOAD_DIR_NAME)}/"
+        limit = html.escape(human_size(UPLOAD_MAX_BYTES))
+        return f"""
+<div class="upload-panel" data-upload-panel>
+  <div class="upload-drop" data-upload-drop>
+    <div>
+      <strong>拖入要上传的文件 / 文件夹</strong>
+      <form data-upload-url="{action}" data-next-url="{next_url}">
+        <input data-file-input type="file" multiple hidden>
+        <input data-folder-input type="file" webkitdirectory directory multiple hidden>
+        <button type="button" data-choose-files>选择文件</button>
+        <button type="button" data-choose-folder>选择文件夹</button>
+        <button type="submit" data-upload-button disabled>上传</button>
+        <span class="hint">上传到 {html.escape(UPLOAD_DIR_NAME)}/，单文件上限 {limit}</span>
+      </form>
+      <ol class="upload-list"></ol>
+      <p class="upload-status"></p>
+    </div>
+  </div>
+</div>
+"""
 
     def send_index(self, send_body: bool) -> None:
         manager = getattr(self.server, "manager", None)
         rows = []
         for item in manager.items:
             href = f"/items/{item.item_id}/" if item.path.is_dir() else f"/items/{item.item_id}"
-            download_link = f"<a class=\"download-link\" href=\"{href}?download=1\" download>下载</a>" if item.path.is_file() else ""
+            download_link = f"<a class=\"action-link\" href=\"/items/{item.item_id}/__download\" download>下载</a>"
             rows.append(
                 f"<tr><td>{item.item_id}</td><td><a href=\"{href}\">{html.escape(item.name)}</a></td>"
                 f"<td>{html.escape(item.kind)}</td><td>{download_link}</td><td>{html.escape(str(item.path))}</td></tr>"
@@ -442,14 +767,62 @@ class ShareHandler(BaseHTTPRequestHandler):
             name = child.name + ("/" if child.is_dir() else "")
             href = urllib.parse.quote(child.name) + ("/" if child.is_dir() else "")
             size = "" if child.is_dir() else f"{child.stat().st_size:,} B"
-            download_link = f"<a class=\"download-link\" href=\"{href}?download=1\" download>下载</a>" if child.is_file() else ""
+            download_href = f"{href}__download" if child.is_dir() else f"{href}/__download"
+            download_link = f"<a class=\"action-link\" href=\"{download_href}\" download>下载</a>"
             rows.append(
                 f"<tr><td><a href=\"{href}\">{html.escape(name)}</a></td>"
                 f"<td>{'文件夹' if child.is_dir() else '文件'}</td><td>{size}</td><td>{download_link}</td></tr>"
             )
         title = item.name if directory.resolve() == item.path.resolve() else f"{item.name}/{directory.resolve().relative_to(item.path.resolve())}"
-        body = f"<h1>{html.escape(title)}</h1><p class=\"hint\">点击文件名直接查看，下载请点右侧操作。</p><table><thead><tr><th>名称</th><th>类型</th><th>大小</th><th class=\"actions\">操作</th></tr></thead><tbody>{''.join(rows)}</tbody></table>"
+        body = (
+            f"<h1>{html.escape(title)}</h1>"
+            "<p class=\"hint\">点击文件名直接查看，下载请点右侧操作。</p>"
+            f"{self.upload_panel(item)}"
+            "<table><thead><tr><th>名称</th><th>类型</th><th>大小</th><th class=\"actions\">操作</th></tr></thead>"
+            f"<tbody>{''.join(rows)}</tbody></table>"
+        )
         self.send_bytes(200, page(title, body), "text/html; charset=utf-8", send_body)
+
+    def send_file_page(self, item: ShareItem, file_path: Path, relative_href: str, send_body: bool) -> None:
+        try:
+            stat = file_path.stat()
+        except Exception as error:
+            self.send_error(404, str(error))
+            return
+        base_url = f"/items/{item.item_id}" if not relative_href else f"/items/{item.item_id}/{relative_href}"
+        preview_url = f"{base_url}/__preview"
+        download_url = f"{base_url}/__download"
+        content_type = file_content_type(file_path)
+        title = file_path.name
+        body = (
+            f"<h1>{html.escape(title)}</h1>"
+            f"<p class=\"hint\">类型：{html.escape(content_type)}｜大小：{html.escape(human_size(stat.st_size))}</p>"
+            "<div class=\"primary-actions\">"
+            f"<a href=\"{preview_url}\" target=\"_blank\" rel=\"noopener\">查看</a>"
+            f"<a href=\"{download_url}\" download>下载</a>"
+            "</div>"
+            f"{self.file_preview_html(file_path, preview_url, content_type, stat.st_size)}"
+        )
+        self.send_bytes(200, page(title, body), "text/html; charset=utf-8", send_body)
+
+    def file_preview_html(self, file_path: Path, preview_url: str, content_type: str, size: int) -> str:
+        if content_type.startswith("image/"):
+            return f'<div class="preview-box"><img src="{preview_url}" alt="{html.escape(file_path.name)}"></div>'
+        if content_type.startswith("video/"):
+            return f'<div class="preview-box"><video controls src="{preview_url}"></video></div>'
+        if content_type.startswith("audio/"):
+            return f'<div class="preview-box"><audio controls src="{preview_url}"></audio></div>'
+        if content_type.startswith("application/pdf"):
+            return f'<div class="preview-box"><iframe src="{preview_url}" title="{html.escape(file_path.name)}"></iframe></div>'
+        if is_text_preview(file_path, content_type):
+            if size > PREVIEW_MAX_BYTES:
+                return f'<p class="hint">文本文件超过 {html.escape(human_size(PREVIEW_MAX_BYTES))}，请点“查看”单独打开。</p>'
+            try:
+                text = file_path.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                return '<p class="hint">这个文件暂时无法读取预览。</p>'
+            return f'<div class="preview-box"><pre>{html.escape(text)}</pre></div>'
+        return '<p class="hint">这个文件类型浏览器可能不能直接预览；当前页面不会自动下载，需要下载时请点“下载”。</p>'
 
     def send_file(self, file_path: Path, send_body: bool, download: bool) -> None:
         try:
@@ -464,8 +837,127 @@ class ShareHandler(BaseHTTPRequestHandler):
             if send_body:
                 with file_path.open("rb") as source:
                     shutil.copyfileobj(source, self.wfile)
-        except OSError as error:
+        except Exception as error:
             self.send_error(404, str(error))
+
+    def send_path_archive(self, source: Path, send_body: bool) -> None:
+        archive_path: Optional[Path] = None
+        try:
+            archive_path = build_path_archive(source)
+            stat = archive_path.stat()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/zip")
+            self.send_header("Content-Length", str(stat.st_size))
+            self.send_header("Content-Disposition", content_disposition("attachment", archive_download_name(source)))
+            self.end_headers()
+            if send_body:
+                with archive_path.open("rb") as source:
+                    shutil.copyfileobj(source, self.wfile)
+        except Exception as error:
+            self.send_error(404, str(error))
+        finally:
+            if archive_path:
+                try:
+                    archive_path.unlink()
+                except OSError:
+                    pass
+
+    def handle_upload(self) -> None:
+        parsed = urllib.parse.urlsplit(self.path)
+        match = re.match(r"^/items/(\d+)/__upload$", parsed.path)
+        if not match:
+            self.send_error(404, "Not Found")
+            return
+        manager = getattr(self.server, "manager", None)
+        item = manager.items_by_id.get(int(match.group(1))) if manager else None
+        query = urllib.parse.parse_qs(parsed.query)
+        relative_path = sanitize_upload_relative_path((query.get("path") or query.get("filename") or [""])[0])
+        filename = str(relative_path)
+        if not item or not item.path.exists():
+            self.reject_upload(manager, "404", filename, "共享项目不存在。")
+            return
+        if not item_allows_upload(item):
+            self.reject_upload(manager, "403", filename, "这个项目没有开启上传。")
+            return
+        length_text = self.headers.get("Content-Length", "").strip()
+        if not length_text.isdigit():
+            self.reject_upload(manager, "411", filename, "缺少 Content-Length。")
+            return
+        content_length = int(length_text)
+        if content_length <= 0:
+            self.reject_upload(manager, "400", filename, "不能上传空文件。")
+            return
+        if content_length > UPLOAD_MAX_BYTES:
+            self.reject_upload(manager, "413", filename, f"单文件不能超过 {human_size(UPLOAD_MAX_BYTES)}。", str(content_length))
+            return
+        try:
+            upload_dir, target = self.prepare_upload_target(item, relative_path)
+            temp_path = self.write_upload_temp(target.parent, target.name, content_length)
+            if target.exists():
+                target = unique_upload_path(target.parent, target.name)
+            temp_path.replace(target)
+        except Exception as error:
+            self.reject_upload(manager, "500", filename, str(error), str(content_length))
+            return
+        upload_relative_path = quote_path(target.relative_to(upload_dir))
+        location = f"/items/{item.item_id}/{urllib.parse.quote(UPLOAD_DIR_NAME)}/{upload_relative_path}"
+        self.send_json(201, {"ok": True, "name": str(target.relative_to(upload_dir)), "size": content_length, "path": location}, {"Location": location})
+        if manager:
+            manager.record_upload(self, "201", item, str(target.relative_to(upload_dir)), str(content_length), location)
+
+    def reject_upload(
+        self,
+        manager: Optional["PythonShareServer"],
+        status: str,
+        filename: str,
+        message: str,
+        size: str = "0",
+    ) -> None:
+        self.send_json(int(status), {"ok": False, "message": message})
+        if manager:
+            item_match = re.match(r"^/items/(\d+)/__upload$", urllib.parse.urlsplit(self.path).path)
+            item = manager.items_by_id.get(int(item_match.group(1))) if item_match else None
+            manager.record_upload(self, status, item, filename, size, f"上传失败：{message}")
+
+    def prepare_upload_dir(self, item: ShareItem) -> Path:
+        upload_dir = item.path / UPLOAD_DIR_NAME
+        if upload_dir.exists() and not upload_dir.is_dir():
+            raise RuntimeError(f"{UPLOAD_DIR_NAME} 已存在但不是文件夹。")
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        if not safe_child(upload_dir, item.path):
+            raise RuntimeError("上传目录不在共享文件夹内。")
+        return upload_dir
+
+    def prepare_upload_target(self, item: ShareItem, relative_path: Path) -> tuple[Path, Path]:
+        upload_dir = self.prepare_upload_dir(item)
+        target_dir = upload_dir / relative_path.parent
+        if not safe_child(target_dir, upload_dir):
+            raise RuntimeError("上传路径不在上传目录内。")
+        target_dir.mkdir(parents=True, exist_ok=True)
+        target = unique_upload_path(target_dir, relative_path.name)
+        if not safe_child(target, upload_dir):
+            raise RuntimeError("上传文件不在上传目录内。")
+        return upload_dir, target
+
+    def write_upload_temp(self, upload_dir: Path, filename: str, content_length: int) -> Path:
+        temp_file = tempfile.NamedTemporaryFile("wb", delete=False, dir=upload_dir, prefix=f".{filename}.", suffix=".uploading")
+        temp_path = Path(temp_file.name)
+        remaining = content_length
+        try:
+            with temp_file:
+                while remaining > 0:
+                    chunk = self.rfile.read(min(UPLOAD_CHUNK_SIZE, remaining))
+                    if not chunk:
+                        raise RuntimeError("连接中断，上传没有完成。")
+                    temp_file.write(chunk)
+                    remaining -= len(chunk)
+        except Exception:
+            try:
+                temp_path.unlink()
+            except OSError:
+                pass
+            raise
+        return temp_path
 
 
 class ReusableThreadingHTTPServer(ThreadingHTTPServer):
@@ -474,16 +966,20 @@ class ReusableThreadingHTTPServer(ThreadingHTTPServer):
 
 
 class PythonShareServer:
-    def __init__(self, on_access: Callable[[dict[str, str]], None]) -> None:
+    def __init__(self, on_access: Callable[[dict[str, str]], None], record_requests: bool = True) -> None:
         self.on_access = on_access
+        self.record_requests = record_requests
         self.httpd: Optional[ThreadingHTTPServer] = None
         self.thread: Optional[threading.Thread] = None
         self.items: list[ShareItem] = []
         self.items_by_id: dict[int, ShareItem] = {}
 
-    def start(self, items: list[ShareItem], port: int, host: str = "0.0.0.0") -> int:
+    def refresh_items(self, items: list[ShareItem]) -> None:
         self.items = list(items)
         self.items_by_id = {item.item_id: item for item in items}
+
+    def start(self, items: list[ShareItem], port: int, host: str = "0.0.0.0") -> int:
+        self.refresh_items(items)
         try:
             self.httpd = ReusableThreadingHTTPServer((host, port), ShareHandler)
         except OSError as error:
@@ -516,12 +1012,34 @@ class PythonShareServer:
         self.on_access(
             {
                 "time": now_text(),
-                "ip": handler.client_address[0],
+                "ip": client_ip_from_handler(handler),
                 "engine": "Python",
                 "method": handler.command,
                 "status": code,
                 "item": item_name,
                 "path": urllib.parse.unquote(parsed.path),
+                "size": size,
+            }
+        )
+
+    def record_upload(
+        self,
+        handler: ShareHandler,
+        code: str,
+        item: Optional[ShareItem],
+        filename: str,
+        size: str,
+        path: str,
+    ) -> None:
+        self.on_access(
+            {
+                "time": now_text(),
+                "ip": client_ip_from_handler(handler),
+                "engine": "Python",
+                "method": "POST",
+                "status": code,
+                "item": item.name if item else "",
+                "path": path if code == "201" else f"上传失败：{filename or '-'}｜{path}",
                 "size": size,
             }
         )
@@ -733,21 +1251,37 @@ class NginxShareServer:
     ) -> str:
         locations = []
         for item in items:
-            if item.temporary:
+            if item_uses_python_backend(item):
                 if python_backend_port is None:
-                    raise RuntimeError("临时项目缺少 Python 后端端口。")
+                    raise RuntimeError("需要 Python 后端的项目缺少端口。")
+                upload_location = ""
+                if item_allows_upload(item):
+                    upload_location = f"""
+        location = /items/{item.item_id}/__upload {{
+            proxy_pass http://127.0.0.1:{python_backend_port};
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_request_buffering off;
+            proxy_buffering off;
+            client_max_body_size 0;
+        }}
+"""
                 locations.append(
                     f"""
+{upload_location}
         location = /items/{item.item_id} {{
             proxy_pass http://127.0.0.1:{python_backend_port};
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
             proxy_buffering off;
         }}
         location /items/{item.item_id}/ {{
             proxy_pass http://127.0.0.1:{python_backend_port};
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
             proxy_buffering off;
         }}
 """
@@ -817,7 +1351,7 @@ http {{
         for item in items:
             href = f"/items/{item.item_id}/" if item.path.is_dir() else f"/items/{item.item_id}"
             mode = "Python 临时" if item.temporary else "Nginx"
-            download_link = f"<a class=\"download-link\" href=\"{href}?download=1\" download>下载</a>" if item.path.is_file() else ""
+            download_link = f"<a class=\"action-link\" href=\"/items/{item.item_id}/__download\" download>下载</a>"
             rows.append(
                 f"<tr><td>{item.item_id}</td><td><a href=\"{href}\">{html.escape(item.name)}</a></td>"
                 f"<td>{html.escape(item.kind)}</td><td>{mode}</td><td>{download_link}</td><td>{html.escape(str(item.path))}</td></tr>"
@@ -978,6 +1512,7 @@ class ShareCard(QFrame):
     contextRequested = Signal(int, QPoint)
     deleteRequested = Signal()
     modeChanged = Signal(int, bool)
+    uploadChanged = Signal(int, bool)
     reorderDragStarted = Signal(int)
     reorderDragEnded = Signal(int)
 
@@ -998,7 +1533,7 @@ class ShareCard(QFrame):
         self.setObjectName("shareCard")
         self.setCursor(Qt.PointingHandCursor)
         self.setFocusPolicy(Qt.StrongFocus)
-        self.setMinimumHeight(82)
+        self.setMinimumHeight(104)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         self.setToolTip(str(self.path))
 
@@ -1043,6 +1578,12 @@ class ShareCard(QFrame):
         self.mode_checkbox.toggled.connect(lambda checked: self.modeChanged.emit(self.item_id, checked))
         right_layout.addWidget(self.mode_checkbox, 0, Qt.AlignTop)
 
+        self.upload_checkbox = QCheckBox("允许上传")
+        self.upload_checkbox.setChecked(item_allows_upload(share_item))
+        self.upload_checkbox.setToolTip("只对文件夹生效，上传会写入共享目录下的 Uploads 文件夹")
+        self.upload_checkbox.toggled.connect(lambda checked: self.uploadChanged.emit(self.item_id, checked))
+        right_layout.addWidget(self.upload_checkbox, 0, Qt.AlignTop)
+
         self.state_label = QLabel()
         self.state_label.setObjectName("itemStateLabel")
         self.state_label.setAlignment(Qt.AlignCenter)
@@ -1066,6 +1607,14 @@ class ShareCard(QFrame):
 
     def set_mode_enabled(self, enabled: bool) -> None:
         self.mode_checkbox.setEnabled(enabled)
+
+    def set_upload_enabled(self, enabled: bool) -> None:
+        self.upload_checkbox.setEnabled(enabled and self.path.is_dir())
+
+    def set_upload_allowed(self, allowed: bool) -> None:
+        blocked = self.upload_checkbox.blockSignals(True)
+        self.upload_checkbox.setChecked(allowed and self.path.is_dir())
+        self.upload_checkbox.blockSignals(blocked)
 
     def set_running(self, running: bool) -> None:
         self.running = running
@@ -1149,6 +1698,7 @@ class DropListWidget(QScrollArea):
     removeRequested = Signal()
     selectionChanged = Signal()
     modeChanged = Signal(int, bool)
+    uploadChanged = Signal(int, bool)
     orderChanged = Signal(list)
 
     def __init__(self, icon_provider: QFileIconProvider) -> None:
@@ -1344,6 +1894,7 @@ class DropListWidget(QScrollArea):
         card.contextRequested.connect(self.itemContextRequested.emit)
         card.deleteRequested.connect(self.removeRequested.emit)
         card.modeChanged.connect(self.modeChanged.emit)
+        card.uploadChanged.connect(self.uploadChanged.emit)
         card.reorderDragStarted.connect(self.begin_drag_session)
         card.reorderDragEnded.connect(self.finish_drag_session)
         card.setAcceptDrops(True)
@@ -1379,6 +1930,16 @@ class DropListWidget(QScrollArea):
         card = self.cards.get(item_id)
         if card:
             card.set_mode_enabled(enabled)
+
+    def set_item_upload_enabled(self, item_id: int, enabled: bool) -> None:
+        card = self.cards.get(item_id)
+        if card:
+            card.set_upload_enabled(enabled)
+
+    def set_item_upload_allowed(self, item_id: int, allowed: bool) -> None:
+        card = self.cards.get(item_id)
+        if card:
+            card.set_upload_allowed(allowed)
 
     def select_single(self, item_id: int) -> None:
         if item_id not in self.cards:
@@ -1563,6 +2124,7 @@ class MainWindow(QMainWindow):
         self.share_list.removeRequested.connect(self.remove_selected)
         self.share_list.selectionChanged.connect(self.refresh_selection_state)
         self.share_list.modeChanged.connect(self.set_item_temporary)
+        self.share_list.uploadChanged.connect(self.set_item_upload_allowed)
         self.share_list.orderChanged.connect(self.reorder_items)
         left_layout.addWidget(self.share_list, 1)
         left_buttons = QHBoxLayout()
@@ -1742,11 +2304,19 @@ class MainWindow(QMainWindow):
         menu = QMenu(self)
         toggle_action = menu.addAction("停止" if share_item and share_item.running else "启动")
         toggle_action.setEnabled(bool(share_item) and not self.nginx_installing)
+        copy_url_action = menu.addAction("复制URL")
+        copy_url_action.setEnabled(bool(share_item))
+        open_url_action = menu.addAction("本机默认浏览器打开")
+        open_url_action.setEnabled(bool(share_item and share_item.running))
         show_action = menu.addAction("Show in Finder")
         remove_action = menu.addAction("移除")
         selected_action = menu.exec(global_position)
         if selected_action == toggle_action and share_item:
             self.stop_item(share_item) if share_item.running else self.start_item(share_item)
+        elif selected_action == copy_url_action and share_item:
+            self.copy_item_url(share_item)
+        elif selected_action == open_url_action and share_item:
+            self.open_item_url(share_item)
         elif selected_action == show_action:
             self.show_item_in_finder(item_id)
         elif selected_action == remove_action:
@@ -1790,8 +2360,17 @@ class MainWindow(QMainWindow):
         return f"http://{self.lan_ips[0]}:{self.port_spin.value()}/"
 
     def item_url(self, item: ShareItem) -> str:
-        suffix = f"items/{item.item_id}/" if item.path.is_dir() else f"items/{item.item_id}"
-        return f"{self.home_url()}{suffix}"
+        return f"{self.home_url()}items/{item.item_id}/"
+
+    def copy_item_url(self, item: ShareItem) -> None:
+        QApplication.clipboard().setText(self.item_url(item))
+        self.show_toast("访问地址已复制")
+
+    def open_item_url(self, item: ShareItem) -> None:
+        if not item.running:
+            self.show_toast("请先启动这个项目")
+            return
+        QDesktopServices.openUrl(QUrl(self.item_url(item)))
 
     def selected_share_item(self) -> Optional[ShareItem]:
         selected = self.share_list.selected_ids()
@@ -1822,8 +2401,19 @@ class MainWindow(QMainWindow):
         item = next((entry for entry in self.items if entry.item_id == item_id), None)
         if item:
             if item.running:
+                self.share_list.set_item_mode_enabled(item_id, False)
                 return
             item.temporary = temporary
+        self.refresh_mode_title()
+
+    def set_item_upload_allowed(self, item_id: int, allowed: bool) -> None:
+        item = next((entry for entry in self.items if entry.item_id == item_id), None)
+        if item:
+            if item.running:
+                self.share_list.set_item_upload_allowed(item_id, item_allows_upload(item))
+                return
+            item.upload_allowed = allowed and item.path.is_dir()
+            self.share_list.set_item_upload_allowed(item_id, item.upload_allowed)
         self.refresh_mode_title()
 
     def item_mode_text(self, item: ShareItem) -> str:
@@ -1872,6 +2462,8 @@ class MainWindow(QMainWindow):
         for item in self.items:
             self.share_list.set_item_running(item.item_id, item.running)
             self.share_list.set_item_mode_enabled(item.item_id, not item.running and not self.nginx_installing)
+            self.share_list.set_item_upload_enabled(item.item_id, not item.running and not self.nginx_installing)
+            self.share_list.set_item_upload_allowed(item.item_id, item_allows_upload(item))
 
     def refresh_runtime_controls(self) -> None:
         self.port_spin.setEnabled(not self.server_running() and not self.nginx_installing)
@@ -2004,16 +2596,24 @@ class MainWindow(QMainWindow):
 
     def rebuild_runtime_for_active_items(self) -> None:
         active_items = self.active_items()
+        nginx_items = [item for item in active_items if not item.temporary]
+        if active_items and not nginx_items and self.python_server and not self.nginx_server:
+            self.python_server.refresh_items(active_items)
+            self.refresh_running_status()
+            self.refresh_runtime_controls()
+            return
         self.stop_runtime()
         NginxShareServer.cleanup_stale_instances()
         if not active_items:
             self.refresh_runtime_controls()
             return
         temporary_items = [item for item in active_items if item.temporary]
-        nginx_items = [item for item in active_items if not item.temporary]
-        if temporary_items and nginx_items:
-            self.python_server = PythonShareServer(lambda _payload: None)
-            backend_port = self.python_server.start(temporary_items, 0, host="127.0.0.1")
+        backend_items = [item for item in active_items if item_uses_python_backend(item)]
+        if nginx_items:
+            backend_port = None
+            if backend_items:
+                self.python_server = PythonShareServer(lambda payload: self.accessReceived.emit(payload), record_requests=False)
+                backend_port = self.python_server.start(backend_items, 0, host="127.0.0.1")
             self.nginx_server = NginxShareServer()
             self.nginx_log_path = self.nginx_server.start(active_items, self.port_spin.value(), backend_port)
             self.nginx_offset = 0
@@ -2040,7 +2640,7 @@ class MainWindow(QMainWindow):
             return
         modes = {self.item_mode_text(item) for item in active_items}
         mode_text = "混合模式" if len(modes) > 1 else next(iter(modes))
-        self.refresh_status(f"{mode_text} 已启动 {len(active_items)} 个项目：{self.home_url()}")
+        self.refresh_status(f"{mode_text} 已启动 {len(active_items)} 个项目")
 
     def copy_url(self) -> None:
         url = self.current_access_url()
@@ -2129,6 +2729,8 @@ class MainWindow(QMainWindow):
         request_match = re.match(r"(?P<method>\S+) (?P<path>\S+)", parts[2])
         path = urllib.parse.unquote(request_match.group("path")) if request_match else parts[2]
         if path == "/favicon.ico":
+            return None
+        if re.match(r"^/items/\d+/__upload$", path):
             return None
         item_name = ""
         engine = "Nginx"
