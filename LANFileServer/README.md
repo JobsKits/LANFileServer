@@ -1,0 +1,61 @@
+# `LANFileServer`
+
+![Jobs出品，必属精品](https://picsum.photos/1500/400)
+
+[toc]
+
+---
+
+## 🔥 <font id=前言>前言</font>
+
+`LANFileServer` 是一个用 [**Python**](https://www.python.org) 写的局域网文件服务器小工具。左侧拖入要暴露的文件 / 文件夹，右侧查看访问记录；每张共享卡片都能独立勾选“临时”，勾选时使用内置 Python HTTP 服务，不勾选时使用本机 [**Nginx**](https://nginx.org/)。
+
+## 一、运行方式 <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a>
+
+### 1.1、macOS
+
+- 双击外层脚本会生成 `LANFileServer-macOS-架构.dmg`：
+
+  ```text
+  ../【MacOS】📦生成dmg.command
+  ```
+
+- 黑色运行窗口是打包过程窗口。打包时不要关闭；看到 `DMG 已生成` 后可以关闭。
+- 生成的 `.dmg` 会自动在 [**Finder**](https://support.apple.com/guide/mac-help/mchlp2605/mac) 中定位；用户可以直接打开 `.dmg` 里的 App，也可以把 App 拖入系统 `Applications` 文件夹。
+- 默认使用系统双架构 [**Python**](https://www.python.org) 和独立的 `.venv-universal2` 生成 `universal2` 包，同时兼容 Intel 与 Apple Silicon。
+- 第一次构建会下载双架构 [**PySide6**](https://doc.qt.io/qtforpython-6/) 依赖，后续构建会直接复用；只有系统没有双架构 Python 时才回退为当前 Mac 原生架构。
+
+### 1.2、Windows
+
+- 双击外层脚本即可：
+
+  ```text
+  ../【Windows】📦生成exe.bat
+  ```
+
+- 它会自动转到内部项目，创建或复用 `.venv`，安装缺失依赖，然后启动图形界面。
+
+## 二、操作流程 <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a>
+
+1. 拖入文件或文件夹到左侧列表，也可以点“添加文件 / 添加文件夹”。
+2. 在每张共享卡片上独立选择模式：勾选“临时”使用 Python HTTP 服务，取消勾选使用 Nginx。
+3. 设置端口，默认 `8080`。
+4. 选中左侧某一个项目后点“启动”，这个按钮只启动当前选中的文件 / 文件夹；切换到已启动的项目时，按钮会显示“停止”。
+5. 右侧表格会显示访问时间、访问人 IP、服务引擎、状态码、访问对象和路径。
+
+- 多个项目可以混用 Python 与 Nginx，所有项目继续共用界面中设置的同一个对外端口。
+- 每个项目都有自己的启动 / 停止状态；没有选中项目时，顶部启动按钮不可用。
+- 右键左侧项目可以执行“启动 / 停止”、“Show in Finder”和“移除”；菜单里的启动状态跟当前项目同步。
+- 长按左侧项目后拖动，可以带动画调整项目显示顺序；排序不会改变已经生成的项目访问编号。
+- 顶部蓝色项目网址跟随当前选中的项目变化，点击即可复制并发送给同一局域网里的其它电脑。
+- 未启动服务且暂无访问记录时，右侧访问记录区域会显示 `启动服务以后查看`。
+- 混用时由 Nginx 对外监听，并把勾选“临时”的项目转发给仅在本机运行的 Python 后端；外部用户仍访问各项目自己的蓝色网址。
+- 如果关闭窗口时仍有服务运行，程序会询问是否最小化到任务栏继续运行；选择“停止服务并退出”才会关闭所有共享服务。
+
+## 三、风险说明 <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a>
+
+- 这个工具会把左侧列表里的文件 / 文件夹暴露给同一局域网内能访问该端口的设备。
+- 不建议把隐私目录、系统目录、浏览器数据目录、密码文件拖入共享列表。
+- 只要有一个项目取消勾选“临时”，程序就会在首次启动时通过 [**Homebrew**](https://brew.sh/)（macOS）或可用的 Windows 包管理器自动准备 Nginx；程序只生成独立的运行配置，不会覆盖系统级 Nginx 配置。
+
+<a id="🔚" href="#前言" style="font-size:17px; color:green; font-weight:bold;">我是有底线的➤点我回到首页</a>
