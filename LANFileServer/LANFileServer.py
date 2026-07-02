@@ -36,8 +36,35 @@ from typing import Callable, Optional
 from zoneinfo import ZoneInfo
 
 try:
-    from PySide6.QtCore import QEasingCurve, QEvent, QFileInfo, QMimeData, QPoint, QPropertyAnimation, QSize, Qt, QTimer, QUrl, Signal
-    from PySide6.QtGui import QAction, QCloseEvent, QCursor, QDesktopServices, QDrag, QResizeEvent
+    from PySide6.QtCore import (
+        QEasingCurve,
+        QEvent,
+        QFileInfo,
+        QMimeData,
+        QObject,
+        QPoint,
+        QPropertyAnimation,
+        QRectF,
+        QSettings,
+        QSize,
+        Qt,
+        QTimer,
+        QUrl,
+        Signal,
+    )
+    from PySide6.QtGui import (
+        QAction,
+        QCloseEvent,
+        QColor,
+        QCursor,
+        QDesktopServices,
+        QDrag,
+        QIcon,
+        QPainter,
+        QPalette,
+        QPixmap,
+        QResizeEvent,
+    )
     from PySide6.QtWidgets import (
         QApplication,
         QCheckBox,
@@ -71,6 +98,15 @@ except ImportError as error:
 APP_NAME = "LANFileServer"
 APP_DIR = Path.home() / ".lan_file_server"
 INTERNAL_ITEM_MIME = "application/x-lanfileserver-item-id"
+THEME_SETTING_KEY = "appearance/theme"
+THEME_SYSTEM = "system"
+THEME_LIGHT = "light"
+THEME_DARK = "dark"
+THEME_OPTIONS = (
+    (THEME_SYSTEM, "跟随系统"),
+    (THEME_LIGHT, "白天模式"),
+    (THEME_DARK, "黑夜模式"),
+)
 UPLOAD_DIR_NAME = "Uploads"
 UPLOAD_MAX_BYTES = 512 * 1024 * 1024
 UPLOAD_CHUNK_SIZE = 1024 * 1024
@@ -143,6 +179,180 @@ TEXT_FILE_EXTENSIONS = {
     ".yaml",
     ".yml",
 }
+
+
+def theme_palette(dark: bool) -> QPalette:
+    colors = (
+        {
+            "window": "#17191d",
+            "window_text": "#f2f4f7",
+            "base": "#20242a",
+            "alternate_base": "#292e35",
+            "button": "#2a2f36",
+            "button_text": "#f2f4f7",
+            "tooltip_base": "#30363d",
+            "tooltip_text": "#f2f4f7",
+            "link": "#5aa7ff",
+            "link_visited": "#b28cff",
+            "highlight": "#0a84ff",
+            "highlighted_text": "#ffffff",
+            "placeholder": "#8b949e",
+            "light": "#3a414a",
+            "midlight": "#343a42",
+            "mid": "#515964",
+            "dark": "#111317",
+            "shadow": "#08090b",
+            "disabled_text": "#727983",
+            "disabled_base": "#1c1f24",
+            "disabled_button": "#24282e",
+        }
+        if dark
+        else {
+            "window": "#f5f7fa",
+            "window_text": "#20242a",
+            "base": "#ffffff",
+            "alternate_base": "#eef2f6",
+            "button": "#ffffff",
+            "button_text": "#20242a",
+            "tooltip_base": "#ffffff",
+            "tooltip_text": "#20242a",
+            "link": "#006ee6",
+            "link_visited": "#7147b8",
+            "highlight": "#0a6fe8",
+            "highlighted_text": "#ffffff",
+            "placeholder": "#7a838d",
+            "light": "#ffffff",
+            "midlight": "#e7ebef",
+            "mid": "#c6cdd5",
+            "dark": "#8c96a1",
+            "shadow": "#5f6872",
+            "disabled_text": "#929aa3",
+            "disabled_base": "#f1f3f5",
+            "disabled_button": "#eceff2",
+        }
+    )
+    palette = QPalette()
+    role_colors = {
+        QPalette.Window: colors["window"],
+        QPalette.WindowText: colors["window_text"],
+        QPalette.Base: colors["base"],
+        QPalette.AlternateBase: colors["alternate_base"],
+        QPalette.ToolTipBase: colors["tooltip_base"],
+        QPalette.ToolTipText: colors["tooltip_text"],
+        QPalette.Text: colors["window_text"],
+        QPalette.Button: colors["button"],
+        QPalette.ButtonText: colors["button_text"],
+        QPalette.BrightText: "#ffffff",
+        QPalette.Link: colors["link"],
+        QPalette.LinkVisited: colors["link_visited"],
+        QPalette.Light: colors["light"],
+        QPalette.Midlight: colors["midlight"],
+        QPalette.Mid: colors["mid"],
+        QPalette.Dark: colors["dark"],
+        QPalette.Shadow: colors["shadow"],
+        QPalette.Highlight: colors["highlight"],
+        QPalette.HighlightedText: colors["highlighted_text"],
+        QPalette.PlaceholderText: colors["placeholder"],
+    }
+    if hasattr(QPalette.ColorRole, "Accent"):
+        role_colors[QPalette.ColorRole.Accent] = colors["highlight"]
+    for role, color in role_colors.items():
+        palette.setColor(role, QColor(color))
+    for role in (QPalette.WindowText, QPalette.Text, QPalette.ButtonText, QPalette.PlaceholderText):
+        palette.setColor(QPalette.Disabled, role, QColor(colors["disabled_text"]))
+    palette.setColor(QPalette.Disabled, QPalette.Base, QColor(colors["disabled_base"]))
+    palette.setColor(QPalette.Disabled, QPalette.Button, QColor(colors["disabled_button"]))
+    palette.setColor(QPalette.Disabled, QPalette.Highlight, QColor(colors["mid"]))
+    palette.setColor(QPalette.Disabled, QPalette.HighlightedText, QColor(colors["disabled_text"]))
+    return palette
+
+
+class ThemeManager(QObject):
+    themeChanged = Signal(str, bool)
+
+    def __init__(self, app: QApplication) -> None:
+        super().__init__(app)
+        self.app = app
+        self.settings = QSettings()
+        self.mode = self.normalize_mode(self.settings.value(THEME_SETTING_KEY, THEME_SYSTEM))
+        self.system_dark = self.palette_is_dark(app.palette())
+        self.style_hints = app.styleHints()
+        color_scheme_changed = getattr(self.style_hints, "colorSchemeChanged", None)
+        if color_scheme_changed is not None:
+            color_scheme_changed.connect(self.system_color_scheme_changed)
+        self.apply_mode()
+
+    @staticmethod
+    def normalize_mode(value: object) -> str:
+        mode = str(value)
+        return mode if mode in (THEME_SYSTEM, THEME_LIGHT, THEME_DARK) else THEME_SYSTEM
+
+    @staticmethod
+    def palette_is_dark(palette: QPalette) -> bool:
+        return palette.color(QPalette.Window).lightness() < 128
+
+    def set_mode(self, mode: str) -> None:
+        normalized = self.normalize_mode(mode)
+        if normalized == self.mode:
+            return
+        self.mode = normalized
+        self.settings.setValue(THEME_SETTING_KEY, normalized)
+        self.settings.sync()
+        self.apply_mode()
+
+    def apply_mode(self) -> None:
+        self.request_platform_color_scheme()
+        if self.mode == THEME_SYSTEM:
+            self.refresh_system_scheme()
+        self.apply_palette()
+
+    def request_platform_color_scheme(self) -> None:
+        set_color_scheme = getattr(self.style_hints, "setColorScheme", None)
+        if set_color_scheme is None or not hasattr(Qt, "ColorScheme"):
+            return
+        target = {
+            THEME_SYSTEM: Qt.ColorScheme.Unknown,
+            THEME_LIGHT: Qt.ColorScheme.Light,
+            THEME_DARK: Qt.ColorScheme.Dark,
+        }[self.mode]
+        try:
+            set_color_scheme(target)
+        except (RuntimeError, TypeError):
+            pass
+
+    def refresh_system_scheme(self) -> None:
+        color_scheme = getattr(self.style_hints, "colorScheme", None)
+        if color_scheme is None or not hasattr(Qt, "ColorScheme"):
+            return
+        scheme = color_scheme()
+        if scheme == Qt.ColorScheme.Dark:
+            self.system_dark = True
+        elif scheme == Qt.ColorScheme.Light:
+            self.system_dark = False
+
+    def effective_dark(self) -> bool:
+        if self.mode == THEME_DARK:
+            return True
+        if self.mode == THEME_LIGHT:
+            return False
+        return self.system_dark
+
+    def apply_palette(self) -> None:
+        dark = self.effective_dark()
+        self.app.setProperty("theme", THEME_DARK if dark else THEME_LIGHT)
+        self.app.setPalette(theme_palette(dark))
+        self.themeChanged.emit(self.mode, dark)
+
+    def system_color_scheme_changed(self, scheme) -> None:  # noqa: ANN001
+        if self.mode != THEME_SYSTEM or not hasattr(Qt, "ColorScheme"):
+            return
+        if scheme == Qt.ColorScheme.Dark:
+            self.system_dark = True
+        elif scheme == Qt.ColorScheme.Light:
+            self.system_dark = False
+        else:
+            return
+        self.apply_palette()
 
 
 @dataclass
@@ -1703,6 +1913,7 @@ class DropListWidget(QScrollArea):
 
     def __init__(self, icon_provider: QFileIconProvider) -> None:
         super().__init__()
+        self.setObjectName("shareList")
         self.icon_provider = icon_provider
         self.cards: dict[int, ShareCard] = {}
         self.card_order: list[int] = []
@@ -1718,6 +1929,7 @@ class DropListWidget(QScrollArea):
         self.setContextMenuPolicy(Qt.CustomContextMenu)
 
         self.content = QWidget()
+        self.content.setObjectName("shareListContent")
         self.content.setAcceptDrops(True)
         self.content.installEventFilter(self)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -2006,8 +2218,9 @@ class MainWindow(QMainWindow):
     publicIpResolved = Signal(dict)
     nginxInstallFinished = Signal(str, str)
 
-    def __init__(self) -> None:
+    def __init__(self, theme_manager: ThemeManager) -> None:
         super().__init__()
+        self.theme_manager = theme_manager
         self.setWindowTitle("LANFileServer - 局域网文件服务器")
         self.resize(1120, 720)
         self.setAcceptDrops(True)
@@ -2033,6 +2246,7 @@ class MainWindow(QMainWindow):
         self.clock_timer.timeout.connect(self.refresh_clock)
         self.build_ui()
         self.apply_style()
+        self.theme_manager.themeChanged.connect(self.theme_changed)
         self.refresh_status("未启动")
         self.refresh_clock()
         self.clock_timer.start(1000)
@@ -2040,6 +2254,7 @@ class MainWindow(QMainWindow):
 
     def build_ui(self) -> None:
         central = QWidget()
+        central.setObjectName("mainCentralWidget")
         root = QVBoxLayout(central)
         root.setContentsMargins(10, 8, 10, 10)
         root.setSpacing(8)
@@ -2092,6 +2307,31 @@ class MainWindow(QMainWindow):
         status_layout = QVBoxLayout(status_box)
         status_layout.setContentsMargins(0, 0, 0, 0)
         status_layout.setSpacing(1)
+        self.theme_button = QPushButton()
+        self.theme_button.setObjectName("themeButton")
+        self.theme_button.setCursor(Qt.PointingHandCursor)
+        self.theme_button.clicked.connect(self.show_theme_menu)
+        theme_button_layout = QHBoxLayout(self.theme_button)
+        theme_button_layout.setContentsMargins(12, 0, 8, 0)
+        theme_button_layout.setSpacing(6)
+        self.theme_button_label = QLabel()
+        self.theme_button_label.setAlignment(Qt.AlignCenter)
+        self.theme_button_label.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+        theme_button_layout.addWidget(self.theme_button_label, 1)
+        self.theme_arrow_label = QLabel("▼")
+        self.theme_arrow_label.setAlignment(Qt.AlignCenter)
+        self.theme_arrow_label.setFixedWidth(12)
+        self.theme_arrow_label.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+        theme_button_layout.addWidget(self.theme_arrow_label, 0)
+        self.theme_menu = QMenu(self.theme_button)
+        self.theme_actions: dict[str, QAction] = {}
+        for mode, label in THEME_OPTIONS:
+            action = self.theme_menu.addAction(label)
+            action.setData(mode)
+            action.triggered.connect(lambda _checked=False, selected_mode=mode: self.theme_manager.set_mode(selected_mode))
+            self.theme_actions[mode] = action
+        self.sync_theme_button(self.theme_manager.mode)
+        status_layout.addWidget(self.theme_button, 0, Qt.AlignRight)
         self.status_label = QLabel()
         self.status_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         status_layout.addWidget(self.status_label)
@@ -2189,9 +2429,39 @@ class MainWindow(QMainWindow):
     def apply_style(self) -> None:
         self.setStyleSheet(
             """
-            QWidget { font-size: 14px; }
-            QPushButton { padding: 7px 12px; }
-            QScrollArea, QTableWidget { border: 1px solid palette(mid); border-radius: 6px; background: palette(base); color: palette(text); }
+            QWidget { color: palette(window-text); font-size: 14px; }
+            QMainWindow, QWidget#mainCentralWidget { background: palette(window); }
+            QPushButton, QSpinBox {
+                min-height: 28px;
+                border: 1px solid palette(mid);
+                border-radius: 4px;
+                background: palette(button);
+                color: palette(button-text);
+            }
+            QPushButton { padding: 4px 12px; }
+            QSpinBox { padding: 3px 6px; }
+            QPushButton#themeButton { min-width: 148px; padding: 3px 0; }
+            QPushButton#themeButton QLabel { background: transparent; color: palette(button-text); }
+            QPushButton:hover, QSpinBox:hover { background: palette(light); }
+            QPushButton:pressed { background: palette(midlight); }
+            QPushButton:disabled, QSpinBox:disabled {
+                background: palette(button);
+                color: palette(mid);
+            }
+            QScrollArea, QTableWidget {
+                border: 1px solid palette(mid);
+                border-radius: 6px;
+                background: palette(base);
+                color: palette(text);
+            }
+            QScrollArea#shareList, QWidget#shareListContent { background: palette(base); }
+            QTableWidget {
+                alternate-background-color: palette(alternate-base);
+                gridline-color: palette(mid);
+                selection-background-color: palette(highlight);
+                selection-color: palette(highlighted-text);
+            }
+            QTableWidget::item { padding: 4px 8px; }
             QFrame#shareCard { border: 1px solid palette(mid); border-radius: 6px; background: palette(base); color: palette(text); }
             QFrame#shareCard[running="true"] { border-color: palette(link); }
             QFrame#shareCard[selected="true"] { border: 2px solid palette(highlight); background: palette(highlight); color: palette(highlighted-text); }
@@ -2205,8 +2475,44 @@ class MainWindow(QMainWindow):
             QLabel#accessPlaceholder { color: palette(mid); font-size: 16px; font-weight: 700; background: transparent; }
             QLabel#toastLabel { padding: 8px 14px; border-radius: 6px; background: palette(highlight); color: palette(highlighted-text); }
             QHeaderView::section { padding: 8px; font-weight: 700; background: palette(button); color: palette(button-text); border: none; border-bottom: 1px solid palette(mid); }
+            QTableCornerButton::section { background: palette(button); border: none; border-bottom: 1px solid palette(mid); }
+            QMenu { border: 1px solid palette(mid); background: palette(base); color: palette(text); }
+            QMenu::item { padding: 6px 24px; }
+            QMenu::item:selected { background: palette(highlight); color: palette(highlighted-text); }
+            QToolTip { border: 1px solid palette(mid); background: palette(tool-tip-base); color: palette(tool-tip-text); }
             """
         )
+
+    def show_theme_menu(self) -> None:
+        menu_size = self.theme_menu.sizeHint()
+        button_bottom_right = self.theme_button.mapToGlobal(self.theme_button.rect().bottomRight())
+        menu_position = QPoint(button_bottom_right.x() - menu_size.width() + 1, button_bottom_right.y() + 1)
+        self.theme_menu.popup(menu_position)
+
+    def theme_dot_icon(self, selected: bool) -> QIcon:
+        logical_size = 14
+        pixel_ratio = max(1.0, self.devicePixelRatioF())
+        pixmap = QPixmap(round(logical_size * pixel_ratio), round(logical_size * pixel_ratio))
+        pixmap.setDevicePixelRatio(pixel_ratio)
+        pixmap.fill(Qt.transparent)
+        if selected:
+            painter = QPainter(pixmap)
+            painter.setRenderHint(QPainter.Antialiasing, True)
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(self.palette().color(QPalette.WindowText))
+            painter.drawEllipse(QRectF(4, 4, 6, 6))
+            painter.end()
+        return QIcon(pixmap)
+
+    def sync_theme_button(self, mode: str) -> None:
+        labels = dict(THEME_OPTIONS)
+        self.theme_button_label.setText(f"主题：{labels.get(mode, labels[THEME_SYSTEM])}")
+        for action_mode, action in self.theme_actions.items():
+            action.setIcon(self.theme_dot_icon(action_mode == mode))
+
+    def theme_changed(self, mode: str, _dark: bool) -> None:
+        self.sync_theme_button(mode)
+        self.apply_style()
 
     def add_paths(self, paths: list[str]) -> None:
         if not self.items:
@@ -2780,7 +3086,10 @@ class MainWindow(QMainWindow):
 def main() -> int:
     os.environ.setdefault("QT_ENABLE_HIGHDPI_SCALING", "1")
     app = QApplication(sys.argv)
-    window = MainWindow()
+    app.setOrganizationName("Jobs")
+    app.setApplicationName(APP_NAME)
+    theme_manager = ThemeManager(app)
+    window = MainWindow(theme_manager)
     window.show()
     return app.exec()
 
