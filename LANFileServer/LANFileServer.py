@@ -83,6 +83,8 @@ try:
         QSizePolicy,
         QSpinBox,
         QSplitter,
+        QStyle,
+        QSystemTrayIcon,
         QTableWidget,
         QTableWidgetItem,
         QToolButton,
@@ -2232,6 +2234,8 @@ class MainWindow(QMainWindow):
         self.nginx_log_path: Optional[Path] = None
         self.nginx_offset = 0
         self.nginx_installing = False
+        self._quitting = False
+        self.tray_icon: Optional[QSystemTrayIcon] = None
         self.pending_start_item_id: Optional[int] = None
         self.lan_ips = get_lan_ips()
         self.public_ip = "获取中"
@@ -2246,11 +2250,69 @@ class MainWindow(QMainWindow):
         self.clock_timer.timeout.connect(self.refresh_clock)
         self.build_ui()
         self.apply_style()
+        self.setup_system_tray()
         self.theme_manager.themeChanged.connect(self.theme_changed)
         self.refresh_status("未启动")
         self.refresh_clock()
         self.clock_timer.start(1000)
         self.resolve_public_ip_async()
+
+    @staticmethod
+    def resource_path(name: str) -> Path:
+        source_root = Path(__file__).resolve().parent.parent
+        bundle_root = Path(getattr(sys, "_MEIPASS", source_root))
+        return bundle_root / name
+
+    def setup_system_tray(self) -> None:
+        if not QSystemTrayIcon.isSystemTrayAvailable():
+            return
+        icon = QIcon(str(self.resource_path("icon.png")))
+        if icon.isNull():
+            icon = self.style().standardIcon(QStyle.StandardPixmap.SP_DriveNetIcon)
+        self.setWindowIcon(icon)
+        menu = QMenu(self)
+        show_action = QAction("显示 LANFileServer", menu)
+        quit_action = QAction("停止服务并退出 LANFileServer", menu)
+        show_action.triggered.connect(self.restore_from_system_tray)
+        quit_action.triggered.connect(self.quit_application)
+        menu.addAction(show_action)
+        menu.addSeparator()
+        menu.addAction(quit_action)
+        self.tray_icon = QSystemTrayIcon(icon, self)
+        self.tray_icon.setToolTip(APP_NAME)
+        self.tray_icon.setContextMenu(menu)
+        self.tray_icon.activated.connect(self.system_tray_activated)
+        self.tray_icon.show()
+
+    def hide_to_system_tray(self) -> None:
+        if self.tray_icon is not None and self.tray_icon.isVisible():
+            self.hide()
+
+    def restore_from_system_tray(self) -> None:
+        self.showNormal()
+        self.raise_()
+        self.activateWindow()
+
+    def system_tray_activated(self, reason: QSystemTrayIcon.ActivationReason) -> None:
+        if reason in {
+            QSystemTrayIcon.ActivationReason.Trigger,
+            QSystemTrayIcon.ActivationReason.DoubleClick,
+        }:
+            self.restore_from_system_tray()
+
+    def quit_application(self) -> None:
+        if self._quitting:
+            return
+        self._quitting = True
+        self.stop_all_servers(silent=True)
+        if self.tray_icon is not None:
+            self.tray_icon.hide()
+        QApplication.quit()
+
+    def changeEvent(self, event: QEvent) -> None:  # noqa: N802
+        super().changeEvent(event)
+        if event.type() == QEvent.Type.WindowStateChange and self.isMinimized():
+            QTimer.singleShot(0, self.hide_to_system_tray)
 
     def build_ui(self) -> None:
         central = QWidget()
@@ -3053,9 +3115,9 @@ class MainWindow(QMainWindow):
         message = QMessageBox(self)
         message.setIcon(QMessageBox.Question)
         message.setWindowTitle("服务仍在运行")
-        message.setText(f"还有 {active_count} 个服务没有结束，是否最小化到任务栏继续运行？")
-        message.setInformativeText("选择最小化后，当前共享服务会继续运行；选择停止并退出会关闭所有服务。")
-        minimize_button = message.addButton("最小化到任务栏", QMessageBox.AcceptRole)
+        message.setText(f"还有 {active_count} 个服务没有结束，是否驻留到顶部菜单栏继续运行？")
+        message.setInformativeText("选择驻留后，当前共享服务会继续运行；选择停止并退出会关闭所有服务。")
+        minimize_button = message.addButton("驻留到顶部菜单栏", QMessageBox.AcceptRole)
         stop_button = message.addButton("停止服务并退出", QMessageBox.DestructiveRole)
         cancel_button = message.addButton("取消", QMessageBox.RejectRole)
         message.setDefaultButton(minimize_button)
@@ -3070,22 +3132,33 @@ class MainWindow(QMainWindow):
         return "cancel"
 
     def closeEvent(self, event: QCloseEvent) -> None:
+        if self._quitting:
+            event.accept()
+            return
         if self.active_items():
             action = self.confirm_close_with_active_services()
             if action == "minimize":
                 event.ignore()
-                self.showMinimized()
+                if self.tray_icon is not None and self.tray_icon.isVisible():
+                    self.hide_to_system_tray()
+                else:
+                    self.showMinimized()
                 return
             if action == "cancel":
                 event.ignore()
                 return
+        self._quitting = True
         self.stop_all_servers(silent=True)
+        if self.tray_icon is not None:
+            self.tray_icon.hide()
         event.accept()
+        QTimer.singleShot(0, QApplication.quit)
 
 
 def main() -> int:
     os.environ.setdefault("QT_ENABLE_HIGHDPI_SCALING", "1")
     app = QApplication(sys.argv)
+    app.setQuitOnLastWindowClosed(False)
     app.setOrganizationName("Jobs")
     app.setApplicationName(APP_NAME)
     theme_manager = ThemeManager(app)

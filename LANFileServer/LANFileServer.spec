@@ -1,11 +1,13 @@
 # -*- mode: python ; coding: utf-8 -*-
+from pathlib import Path
 
+project_dir = Path(SPEC).resolve().parent
 
 a = Analysis(
     ['/Users/jobs/Documents/Github/JobsGenesis/JobsPythonTools.py/LANFileServer.py/LANFileServer/LANFileServer.py'],
     pathex=[],
     binaries=[],
-    datas=[],
+    datas=[(str(project_dir.parent / 'icon.png'), '.')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},

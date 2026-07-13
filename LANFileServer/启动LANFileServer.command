@@ -166,7 +166,7 @@ build_macos_app_with_arch() {
   local build_arch="$1"
   cd "${PROJECT_DIR}" || exit 1
   note_echo "开始打包 macOS .app，目标架构：${build_arch}"
-  "${PYTHON_BIN}" -m PyInstaller --noconfirm --clean --windowed --name "${APP_NAME}" --target-arch "${build_arch}" "${ENTRY_FILE}" 2>&1 | tee -a "$LOG_FILE"
+  "${PYTHON_BIN}" -m PyInstaller --noconfirm --clean --windowed --name "${APP_NAME}" --target-arch "${build_arch}" --add-data "${PROJECT_DIR}/../icon.png:." "${ENTRY_FILE}" 2>&1 | tee -a "$LOG_FILE"
 }
 # 获取当前机器原生架构。
 get_native_arch() {
