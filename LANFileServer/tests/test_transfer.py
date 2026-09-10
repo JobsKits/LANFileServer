@@ -8,6 +8,7 @@ import unittest
 import urllib.error
 import urllib.request
 from pathlib import Path
+from unittest import mock
 
 from lanfileserver.models import ShareItem
 from lanfileserver.servers import NginxShareServer, PythonShareServer
@@ -44,6 +45,42 @@ class TransferTests(unittest.TestCase):
             self.assertEqual(response.status, 206)
             self.assertEqual(response.headers["Accept-Ranges"], "bytes")
             self.assertEqual(response.read(), self.payload[1024:2048])
+
+    def test_heic_browser_preview_and_image_keyboard_navigation(self) -> None:
+        (self.root / "01.jpg").write_bytes(b"jpeg")
+        heic_path = self.root / "02.HEIC"
+        heic_path.write_bytes(b"heic")
+        (self.root / "03.png").write_bytes(b"png")
+
+        with self.request("/items/1/") as response:
+            directory_body = response.read().decode()
+        self.assertIn("/items/1/__preview/02.HEIC?size=thumb", directory_body)
+
+        with self.request("/items/1/02.HEIC") as response:
+            detail_body = response.read().decode()
+        self.assertIn('data-image-viewer data-prev="/items/1/01.jpg" data-next="/items/1/03.png"', detail_body)
+        self.assertIn('src="/items/1/__preview/02.HEIC"', detail_body)
+        self.assertNotIn(">查看</a>", detail_body)
+        self.assertIn(">下载原文件</a>", detail_body)
+        self.assertIn('data-image-zoom-out aria-label="缩小图片">－ 缩小</button>', detail_body)
+        self.assertIn('data-image-zoom-value>100%</span>', detail_body)
+        self.assertIn('data-image-zoom-in aria-label="放大图片">放大 ＋</button>', detail_body)
+        self.assertIn("2 / 3 · 键盘 ← → 翻阅", detail_body)
+        self.assertIn("ArrowLeft", detail_body)
+        self.assertIn("ArrowRight", detail_body)
+        self.assertIn("Math.min(4,Math.max(.5", detail_body)
+
+        preview_bytes = b"jpeg preview"
+        with mock.patch("lanfileserver.web.render_heif_preview", return_value=preview_bytes) as converter:
+            with self.request("/items/1/__preview/02.HEIC?size=thumb") as response:
+                self.assertEqual(response.headers.get_content_type(), "image/jpeg")
+                self.assertIsNone(response.headers["Content-Disposition"])
+                self.assertEqual(response.read(), preview_bytes)
+        converter.assert_called_once_with(heic_path, 320)
+
+        with self.request("/items/1/__raw/02.HEIC?download=1") as response:
+            self.assertTrue(response.headers["Content-Disposition"].startswith("attachment;"))
+            self.assertEqual(response.read(), b"heic")
 
     def test_upload_streams_into_uploads_without_overwrite(self) -> None:
         content = b"streamed upload"

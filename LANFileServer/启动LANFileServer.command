@@ -104,6 +104,7 @@ select_macos_build_python() {
 runtime_dependencies_ready() {
   "${PYTHON_BIN}" - <<'PY' >/dev/null 2>&1
 import PySide6
+import qrcode
 PY
 }
 # 安装缺失的运行依赖。
@@ -116,7 +117,7 @@ install_missing_dependencies() {
   "${PYTHON_BIN}" -m pip install --upgrade pip 2>&1 | tee -a "$LOG_FILE"
   "${PYTHON_BIN}" -m pip install -r "${REQUIREMENTS_FILE}" 2>&1 | tee -a "$LOG_FILE"
   if ! runtime_dependencies_ready; then
-    error_echo "依赖安装后仍无法导入 PySide6，请查看日志：${LOG_FILE}"
+    error_echo "依赖安装后仍不完整，请查看日志：${LOG_FILE}"
     exit 1
   fi
 }

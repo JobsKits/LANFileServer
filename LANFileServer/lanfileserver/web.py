@@ -9,6 +9,8 @@ import mimetypes
 import os
 import re
 import shutil
+import subprocess
+import sys
 import tempfile
 import urllib.parse
 import zipfile
@@ -33,12 +35,17 @@ TEXT_FILE_EXTENSIONS = {
     ".py", ".rb", ".sh", ".swift", ".toml", ".txt", ".xml", ".yaml", ".yml",
 }
 
+HEIF_FILE_EXTENSIONS = {".heic", ".heif"}
+HEIF_CONTENT_TYPES = {".heic": "image/heic", ".heif": "image/heif"}
+IMAGE_PREVIEW_MAX_DIMENSION = 2560
+IMAGE_THUMBNAIL_MAX_DIMENSION = 320
+
 
 CSS = r"""
 :root{color-scheme:light dark;--bg:#f4f7fb;--panel:rgba(255,255,255,.88);--text:#142033;--muted:#66758c;--line:#dce3ed;--brand:#1677ff;--brand2:#55a6ff;--danger:#d9363e;--shadow:0 20px 55px rgba(32,61,96,.13)}
 @media(prefers-color-scheme:dark){:root{--bg:#0c111b;--panel:rgba(22,29,43,.88);--text:#eef4ff;--muted:#94a3b8;--line:#2b3548;--brand:#4c9aff;--brand2:#75b7ff;--danger:#ff6b72;--shadow:0 24px 70px rgba(0,0,0,.35)}}
-*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(circle at 10% 0,rgba(22,119,255,.16),transparent 28rem),var(--bg);color:var(--text);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",sans-serif}.shell{width:min(1120px,calc(100% - 28px));margin:0 auto;padding:24px 0 56px}.top{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:18px}.brand{display:flex;align-items:center;gap:12px}.logo{display:grid;place-items:center;width:42px;height:42px;border-radius:13px;background:linear-gradient(145deg,var(--brand),var(--brand2));color:#fff;font-size:21px;font-weight:800;box-shadow:0 9px 28px rgba(22,119,255,.3)}h1{margin:0;font-size:22px}.sub{color:var(--muted);font-size:12px}.actions{display:flex;gap:8px;flex-wrap:wrap}.btn,a.btn{appearance:none;border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:10px;padding:9px 13px;text-decoration:none;cursor:pointer;font-weight:600}.btn:hover{border-color:var(--brand);color:var(--brand)}.btn.primary{border-color:transparent;background:var(--brand);color:#fff}.btn.danger{color:var(--danger)}.card{border:1px solid var(--line);border-radius:18px;background:var(--panel);box-shadow:var(--shadow);backdrop-filter:blur(18px);overflow:hidden}.hero{padding:22px}.crumbs{display:flex;gap:7px;align-items:center;flex-wrap:wrap;color:var(--muted);margin-bottom:14px}.crumbs a{color:var(--brand);text-decoration:none}.headline{display:flex;justify-content:space-between;gap:16px;align-items:flex-end}.headline h2{font-size:25px;margin:0 0 3px;word-break:break-all}.meta{color:var(--muted)}.upload{margin-top:18px;border:2px dashed color-mix(in srgb,var(--brand) 46%,var(--line));border-radius:15px;padding:22px;text-align:center;transition:.2s;background:color-mix(in srgb,var(--brand) 4%,transparent)}.upload.drag{transform:scale(1.006);border-color:var(--brand);background:color-mix(in srgb,var(--brand) 10%,transparent)}.upload strong{display:block;font-size:16px;margin-bottom:4px}.upload-controls{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin-top:13px}.queue{display:grid;gap:8px;margin-top:13px;text-align:left}.job{padding:10px 12px;border:1px solid var(--line);border-radius:11px;background:color-mix(in srgb,var(--panel) 80%,transparent)}.jobline{display:flex;justify-content:space-between;gap:12px}.jobname{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.jobmeta{color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}.bar{height:5px;background:var(--line);border-radius:9px;margin-top:8px;overflow:hidden}.bar i{display:block;width:0;height:100%;background:linear-gradient(90deg,var(--brand),#63d4ff);transition:width .15s}.toolbar{padding:13px 17px;border-top:1px solid var(--line);border-bottom:1px solid var(--line);display:flex;gap:10px;align-items:center}.search,.sort,.chat input{min-width:0;border:1px solid var(--line);border-radius:10px;padding:9px 12px;background:transparent;color:var(--text);outline:none}.search{flex:1}.search:focus,.sort:focus,.chat input:focus{border-color:var(--brand)}.list{width:100%;border-collapse:collapse}.list th,.list td{padding:12px 17px;border-bottom:1px solid var(--line);text-align:left}.list th{font-size:12px;color:var(--muted);font-weight:600}.list tr:last-child td{border-bottom:0}.list tr:hover td{background:color-mix(in srgb,var(--brand) 4%,transparent)}.name{display:flex;align-items:center;gap:10px;min-width:0}.ico,.thumb{display:grid;place-items:center;width:40px;height:40px;border-radius:10px;background:color-mix(in srgb,var(--brand) 10%,transparent);font-size:17px;flex:0 0 40px}.thumb{object-fit:cover}.name a{color:var(--text);text-decoration:none;font-weight:650;word-break:break-all}.name a:hover{color:var(--brand)}.file-actions{display:flex;gap:7px;justify-content:flex-end;align-items:center}.file-actions a{color:var(--brand);text-decoration:none;font-weight:600}.file-actions button{border:0;background:none;color:var(--danger);cursor:pointer;font:inherit;font-weight:600;padding:0}.preview{padding:18px;border-top:1px solid var(--line);text-align:center}.preview img,.preview video,.preview iframe{max-width:100%;max-height:70vh;border:0;border-radius:12px}.preview audio{width:min(620px,100%)}pre{text-align:left;overflow:auto;padding:16px;border-radius:12px;background:#0f172a;color:#dbeafe}.chat{margin-top:18px}.chat-head{padding:18px 20px 10px}.chat-messages{height:250px;overflow:auto;padding:8px 20px;display:grid;align-content:start;gap:9px}.chat-message{max-width:min(78%,620px);padding:9px 12px;border-radius:12px;background:color-mix(in srgb,var(--brand) 9%,var(--panel));word-break:break-word}.chat-meta{display:flex;gap:8px;color:var(--muted);font-size:11px;margin-bottom:3px}.chat-empty{color:var(--muted);text-align:center;padding:62px 12px}.chat-compose{display:grid;grid-template-columns:150px 1fr auto;gap:8px;padding:13px 20px 18px;border-top:1px solid var(--line)}.overlay{position:fixed;inset:0;display:none;place-items:center;padding:20px;background:rgba(0,0,0,.62);backdrop-filter:blur(6px);z-index:20}.overlay.show{display:grid}.modal{width:min(390px,100%);padding:22px;border:1px solid var(--line);border-radius:18px;background:var(--bg);box-shadow:var(--shadow);text-align:center}.modal img{width:min(280px,100%);background:#fff;border-radius:12px}.modal-url{margin:10px 0 16px;color:var(--muted);word-break:break-all}.empty{padding:42px;text-align:center;color:var(--muted)}.toast{position:fixed;left:50%;bottom:28px;transform:translate(-50%,20px);opacity:0;background:#101827;color:#fff;padding:10px 15px;border-radius:11px;transition:.2s;pointer-events:none;z-index:30}.toast.show{opacity:1;transform:translate(-50%,0)}
-@media(max-width:700px){.shell{width:min(calc(100% - 16px),1120px);padding-top:12px}.top,.headline{align-items:flex-start;flex-direction:column}.top .actions{width:100%;display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.top .btn{width:100%;text-align:center}.hero{padding:16px}.toolbar{align-items:stretch;flex-direction:column}.list th:nth-child(2),.list td:nth-child(2),.list th:nth-child(3),.list td:nth-child(3),.list th:nth-child(4),.list td:nth-child(4){display:none}.list th,.list td{padding:11px}.file-actions{flex-direction:column}.upload{padding:18px 10px}.chat-compose{grid-template-columns:1fr}.chat-message{max-width:92%}}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(circle at 10% 0,rgba(22,119,255,.16),transparent 28rem),var(--bg);color:var(--text);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",sans-serif}.shell{width:min(1120px,calc(100% - 28px));margin:0 auto;padding:24px 0 56px}.top{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:18px}.brand{display:flex;align-items:center;gap:12px}.logo{display:grid;place-items:center;width:42px;height:42px;border-radius:13px;background:linear-gradient(145deg,var(--brand),var(--brand2));color:#fff;font-size:21px;font-weight:800;box-shadow:0 9px 28px rgba(22,119,255,.3)}h1{margin:0;font-size:22px}.sub{color:var(--muted);font-size:12px}.actions{display:flex;gap:8px;flex-wrap:wrap}.btn,a.btn{appearance:none;border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:10px;padding:9px 13px;text-decoration:none;cursor:pointer;font-weight:600}.btn:hover{border-color:var(--brand);color:var(--brand)}.btn.primary{border-color:transparent;background:var(--brand);color:#fff}.btn.danger{color:var(--danger)}.card{border:1px solid var(--line);border-radius:18px;background:var(--panel);box-shadow:var(--shadow);backdrop-filter:blur(18px);overflow:hidden}.hero{padding:22px}.crumbs{display:flex;gap:7px;align-items:center;flex-wrap:wrap;color:var(--muted);margin-bottom:14px}.crumbs a{color:var(--brand);text-decoration:none}.headline{display:flex;justify-content:space-between;gap:16px;align-items:flex-end}.headline h2{font-size:25px;margin:0 0 3px;word-break:break-all}.meta{color:var(--muted)}.upload{margin-top:18px;border:2px dashed color-mix(in srgb,var(--brand) 46%,var(--line));border-radius:15px;padding:22px;text-align:center;transition:.2s;background:color-mix(in srgb,var(--brand) 4%,transparent)}.upload.drag{transform:scale(1.006);border-color:var(--brand);background:color-mix(in srgb,var(--brand) 10%,transparent)}.upload strong{display:block;font-size:16px;margin-bottom:4px}.upload-controls{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin-top:13px}.queue{display:grid;gap:8px;margin-top:13px;text-align:left}.job{padding:10px 12px;border:1px solid var(--line);border-radius:11px;background:color-mix(in srgb,var(--panel) 80%,transparent)}.jobline{display:flex;justify-content:space-between;gap:12px}.jobname{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.jobmeta{color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}.bar{height:5px;background:var(--line);border-radius:9px;margin-top:8px;overflow:hidden}.bar i{display:block;width:0;height:100%;background:linear-gradient(90deg,var(--brand),#63d4ff);transition:width .15s}.toolbar{padding:13px 17px;border-top:1px solid var(--line);border-bottom:1px solid var(--line);display:flex;gap:10px;align-items:center}.search,.sort,.chat input{min-width:0;border:1px solid var(--line);border-radius:10px;padding:9px 12px;background:transparent;color:var(--text);outline:none}.search{flex:1}.search:focus,.sort:focus,.chat input:focus{border-color:var(--brand)}.list{width:100%;border-collapse:collapse}.list th,.list td{padding:12px 17px;border-bottom:1px solid var(--line);text-align:left}.list th{font-size:12px;color:var(--muted);font-weight:600}.list tr:last-child td{border-bottom:0}.list tr:hover td{background:color-mix(in srgb,var(--brand) 4%,transparent)}.name{display:flex;align-items:center;gap:10px;min-width:0}.ico,.thumb{display:grid;place-items:center;width:40px;height:40px;border-radius:10px;background:color-mix(in srgb,var(--brand) 10%,transparent);font-size:17px;flex:0 0 40px}.thumb{object-fit:cover}.name a{color:var(--text);text-decoration:none;font-weight:650;word-break:break-all}.name a:hover{color:var(--brand)}.file-actions{display:flex;gap:7px;justify-content:flex-end;align-items:center}.file-actions a{color:var(--brand);text-decoration:none;font-weight:600}.file-actions button{border:0;background:none;color:var(--danger);cursor:pointer;font:inherit;font-weight:600;padding:0}.preview{padding:18px;border-top:1px solid var(--line);text-align:center}.preview img,.preview video,.preview iframe{max-width:100%;max-height:70vh;border:0;border-radius:12px}.preview audio{width:min(620px,100%)}.image-tools{display:flex;justify-content:center;align-items:center;gap:9px;margin-bottom:14px}.image-tools .btn{min-width:92px}.image-tools .btn:disabled{opacity:.36;cursor:not-allowed;border-color:var(--line);color:var(--muted)}.image-zoom-value{width:58px;color:var(--muted);font-variant-numeric:tabular-nums}.image-stage{overflow:auto;max-height:70vh;border-radius:12px}.image-canvas{display:grid;place-items:center;min-width:100%;min-height:280px}.image-stage img{box-shadow:0 12px 36px rgba(0,0,0,.18);transition:width .16s ease,height .16s ease}.image-viewer.zoomed .image-stage img{max-width:none;max-height:none}.image-pager{display:grid;grid-template-columns:120px 1fr 120px;align-items:center;gap:12px;margin-top:16px}.image-pager .btn{white-space:nowrap}.image-pager .disabled{opacity:.36;pointer-events:none}.image-count{color:var(--muted)}pre{text-align:left;overflow:auto;padding:16px;border-radius:12px;background:#0f172a;color:#dbeafe}.chat{margin-top:18px}.chat-head{padding:18px 20px 10px}.chat-messages{height:250px;overflow:auto;padding:8px 20px;display:grid;align-content:start;gap:9px}.chat-message{max-width:min(78%,620px);padding:9px 12px;border-radius:12px;background:color-mix(in srgb,var(--brand) 9%,var(--panel));word-break:break-word}.chat-meta{display:flex;gap:8px;color:var(--muted);font-size:11px;margin-bottom:3px}.chat-empty{color:var(--muted);text-align:center;padding:62px 12px}.chat-compose{display:grid;grid-template-columns:150px 1fr auto;gap:8px;padding:13px 20px 18px;border-top:1px solid var(--line)}.overlay{position:fixed;inset:0;display:none;place-items:center;padding:20px;background:rgba(0,0,0,.62);backdrop-filter:blur(6px);z-index:20}.overlay.show{display:grid}.modal{width:min(390px,100%);padding:22px;border:1px solid var(--line);border-radius:18px;background:var(--bg);box-shadow:var(--shadow);text-align:center}.modal img{width:min(280px,100%);background:#fff;border-radius:12px}.modal-url{margin:10px 0 16px;color:var(--muted);word-break:break-all}.empty{padding:42px;text-align:center;color:var(--muted)}.toast{position:fixed;left:50%;bottom:28px;transform:translate(-50%,20px);opacity:0;background:#101827;color:#fff;padding:10px 15px;border-radius:11px;transition:.2s;pointer-events:none;z-index:30}.toast.show{opacity:1;transform:translate(-50%,0)}
+@media(max-width:700px){.shell{width:min(calc(100% - 16px),1120px);padding-top:12px}.top,.headline{align-items:flex-start;flex-direction:column}.top .actions{width:100%;display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.top .btn{width:100%;text-align:center}.hero{padding:16px}.toolbar{align-items:stretch;flex-direction:column}.list th:nth-child(2),.list td:nth-child(2),.list th:nth-child(3),.list td:nth-child(3),.list th:nth-child(4),.list td:nth-child(4){display:none}.list th,.list td{padding:11px}.file-actions{flex-direction:column}.upload{padding:18px 10px}.image-tools{flex-wrap:wrap}.image-canvas{min-height:180px}.image-pager{grid-template-columns:1fr 1fr}.image-count{grid-column:1/-1;grid-row:1}.chat-compose{grid-template-columns:1fr}.chat-message{max-width:92%}}
 """
 
 
@@ -53,7 +60,13 @@ function hideQR(){const overlay=$('#qr-overlay');overlay.classList.remove('show'
 function filterRows(v){v=v.trim().toLowerCase();$$('[data-file-row]').forEach(r=>r.hidden=!r.dataset.name.includes(v))}
 function sortRows(mode){$$('.list tbody').forEach(body=>{const rows=$$('[data-file-row]',body),parent=rows.find(r=>r.dataset.parent==='1'),items=rows.filter(r=>r!==parent);items.sort((a,b)=>{const ak=Number(a.dataset.kind),bk=Number(b.dataset.kind);if(ak!==bk)return ak-bk;if(mode==='size')return Number(b.dataset.size)-Number(a.dataset.size);if(mode==='time')return Number(b.dataset.time)-Number(a.dataset.time);return a.dataset.name.localeCompare(b.dataset.name,'zh-CN')});body.replaceChildren(...(parent?[parent]:[]),...items)})}
 async function deleteUpload(button){const path=button.dataset.deletePath;if(!path||!confirm(`确定删除上传文件「${path}」？\n此操作不能撤销。`))return;const response=await fetch(button.dataset.endpoint+'?path='+encodeURIComponent(path),{method:'DELETE'});let data={};try{data=await response.json()}catch{}if(response.ok){toast('文件已删除');setTimeout(()=>location.reload(),500)}else toast(data.message||'删除失败')}
-document.addEventListener('keydown',event=>{if(event.key==='Escape')hideQR()});
+const imageViewer=$('[data-image-viewer]');
+document.addEventListener('keydown',event=>{if(event.key==='Escape')hideQR();const tag=event.target?.tagName;if(['INPUT','TEXTAREA','SELECT'].includes(tag)||event.target?.isContentEditable)return;if(!imageViewer)return;const target=event.key==='ArrowLeft'?imageViewer.dataset.prev:event.key==='ArrowRight'?imageViewer.dataset.next:'';if(target){event.preventDefault();location.href=target}});
+if(imageViewer){const stage=$('.image-stage',imageViewer),canvas=$('.image-canvas',imageViewer),image=$('img',canvas),zoomOut=$('[data-image-zoom-out]',imageViewer),zoomIn=$('[data-image-zoom-in]',imageViewer),zoomValue=$('[data-image-zoom-value]',imageViewer);let zoom=1,baseWidth=0,baseHeight=0;
+ const measure=()=>{if(!image.complete||!image.naturalWidth)return false;image.style.width='';image.style.height='';canvas.style.width='';canvas.style.height='';const rect=image.getBoundingClientRect();baseWidth=rect.width;baseHeight=rect.height;return baseWidth>0&&baseHeight>0};
+ const apply=next=>{if(!baseWidth&&!measure())return;const oldWidth=stage.scrollWidth||1,oldHeight=stage.scrollHeight||1,centerX=(stage.scrollLeft+stage.clientWidth/2)/oldWidth,centerY=(stage.scrollTop+stage.clientHeight/2)/oldHeight;zoom=Math.min(4,Math.max(.5,Math.round(next*100)/100));const width=Math.round(baseWidth*zoom),height=Math.round(baseHeight*zoom);imageViewer.classList.toggle('zoomed',zoom!==1);image.style.width=width+'px';image.style.height=height+'px';canvas.style.width=Math.max(stage.clientWidth,width)+'px';canvas.style.height=Math.max(stage.clientHeight,height)+'px';zoomValue.textContent=Math.round(zoom*100)+'%';zoomOut.disabled=zoom<=.5;zoomIn.disabled=zoom>=4;requestAnimationFrame(()=>{stage.scrollLeft=Math.max(0,centerX*stage.scrollWidth-stage.clientWidth/2);stage.scrollTop=Math.max(0,centerY*stage.scrollHeight-stage.clientHeight/2)})};
+ zoomOut.addEventListener('click',()=>apply(zoom-.25));zoomIn.addEventListener('click',()=>apply(zoom+.25));image.addEventListener('load',measure);if(image.complete)measure();window.addEventListener('resize',()=>{if(zoom===1)measure()});
+}
 const upload=$('[data-upload]');
 if(upload){const queue=$('.queue',upload),endpoint=upload.dataset.endpoint;let jobs=[];
  const pathOf=f=>f._path||f.webkitRelativePath||f.name;
@@ -87,12 +100,49 @@ def safe_child(child: Path, parent: Path) -> bool:
 
 
 def file_content_type(file_path: Path) -> str:
-    content_type = mimetypes.guess_type(file_path.name)[0]
+    content_type = HEIF_CONTENT_TYPES.get(file_path.suffix.lower()) or mimetypes.guess_type(file_path.name)[0]
     if not content_type and file_path.suffix.lower() in TEXT_FILE_EXTENSIONS:
         content_type = "text/plain"
     if content_type and content_type.startswith("text/") and "charset=" not in content_type.lower():
         return f"{content_type}; charset=utf-8"
     return content_type or "application/octet-stream"
+
+
+def is_image_file(file_path: Path) -> bool:
+    return file_content_type(file_path).startswith("image/")
+
+
+def render_heif_preview(file_path: Path, max_dimension: int) -> bytes:
+    if sys.platform == "darwin":
+        handle = tempfile.NamedTemporaryFile("wb", delete=False, suffix=".jpg")
+        output_path = Path(handle.name)
+        handle.close()
+        try:
+            result = subprocess.run(
+                ["sips", "-s", "format", "jpeg", "-s", "formatOptions", "85", "-Z", str(max_dimension), str(file_path), "--out", str(output_path)],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if result.returncode or not output_path.stat().st_size:
+                raise RuntimeError((result.stderr or result.stdout).strip() or "系统未能转换 HEIC 图片。")
+            return output_path.read_bytes()
+        finally:
+            output_path.unlink(missing_ok=True)
+
+    try:
+        from PIL import Image, ImageOps
+        from pillow_heif import register_heif_opener
+    except ImportError as error:
+        raise RuntimeError("缺少 HEIC 预览组件，请重新运行启动脚本安装依赖。") from error
+
+    register_heif_opener(thumbnails=False)
+    output = io.BytesIO()
+    with Image.open(file_path) as source:
+        image = ImageOps.exif_transpose(source)
+        image.thumbnail((max_dimension, max_dimension), Image.Resampling.LANCZOS)
+        image.convert("RGB").save(output, "JPEG", quality=85, optimize=True)
+    return output.getvalue()
 
 
 def content_disposition(disposition: str, filename: str) -> str:
@@ -252,6 +302,13 @@ class ShareHandler(BaseHTTPRequestHandler):
         extra = urllib.parse.unquote(match.group(2) or "")
         if extra == "__chat":
             self.send_chat(item, parsed); return
+        if extra == "__preview" and item.path.is_file() and is_image_file(item.path):
+            self.send_image_preview(item.path, parsed, send_body); return
+        if extra.startswith("__preview/") and item.path.is_dir():
+            target = item.path.joinpath(*[part for part in extra[10:].split("/") if part])
+            if safe_child(target, item.path) and target.is_file() and is_image_file(target):
+                self.send_image_preview(target, parsed, send_body); return
+            self.send_error(404); return
         if extra == "__raw" and item.path.is_file():
             self.send_file(item.path, send_body, parsed.query); return
         if extra.startswith("__raw/") and item.path.is_dir():
@@ -302,7 +359,7 @@ class ShareHandler(BaseHTTPRequestHandler):
             href = f"/items/{item.item_id}/" if item.path.is_dir() else f"/items/{item.item_id}"
             download = f"/items/{item.item_id}/__download" if item.path.is_dir() else f"/items/{item.item_id}/__raw?download=1"
             stat = item.path.stat()
-            thumbnail = f"/items/{item.item_id}/__raw" if item.path.is_file() and file_content_type(item.path).startswith("image/") else ""
+            thumbnail = f"/items/{item.item_id}/__preview?size=thumb" if item.path.is_file() and is_image_file(item.path) else ""
             rows.append(self.file_row(item.name, href, item.kind, stat.st_size if item.path.is_file() else None, download, stat.st_mtime, thumbnail=thumbnail))
         toolbar = '<div class="toolbar"><input class="search" placeholder="搜索共享项目" oninput="filterRows(this.value)"><select class="sort" onchange="sortRows(this.value)"><option value="name">名称排序</option><option value="time">最近修改</option><option value="size">文件大小</option></select></div>'
         body = f'<section class="card"><div class="hero"><div class="headline"><div><h2>全部共享</h2><div class="meta">{len(rows)} 个共享项目</div></div></div></div>{toolbar}{self.list_html(rows)}</section>'
@@ -327,7 +384,7 @@ class ShareHandler(BaseHTTPRequestHandler):
             delete_path = ""
             if item_allows_upload(item) and not upload_root.is_symlink() and child.is_file() and safe_child(child, upload_root):
                 delete_path = str(child.resolve().relative_to(upload_root.resolve())).replace("\\", "/")
-            thumbnail = raw if child.is_file() and file_content_type(child).startswith("image/") else ""
+            thumbnail = f"/items/{item.item_id}/__preview/{quote_path(child.relative_to(item.path))}?size=thumb" if child.is_file() and is_image_file(child) else ""
             stat = child.stat()
             rows.append(self.file_row(child.name + ("/" if child.is_dir() else ""), href, "文件夹" if child.is_dir() else "文件", stat.st_size if child.is_file() else None, download, stat.st_mtime, thumbnail, delete_path, item.item_id))
         upload = ""
@@ -357,18 +414,59 @@ class ShareHandler(BaseHTTPRequestHandler):
         relative_path = Path(relative) if relative else Path(file_path.name) if item.path.is_dir() else Path()
         raw = f"/items/{item.item_id}/__raw" + ("/" + quote_path(relative_path) if relative_path.parts else "")
         content_type = file_content_type(file_path)
-        preview = self.preview_html(file_path, raw, content_type)
-        body = f'''<section class="card"><div class="hero"><div class="crumbs"><a href="/">全部共享</a><span>/</span><span>{html.escape(file_path.name)}</span></div><div class="headline"><div><h2>{html.escape(file_path.name)}</h2><div class="meta">{html.escape(content_type)} · {human_size(file_path.stat().st_size)}</div></div><div class="actions"><a class="btn" href="{raw}" target="_blank">查看</a><a class="btn primary" href="{raw}?download=1" download="{html.escape(file_path.name)}">下载原文件</a></div></div></div>{preview}</section>{chat_html(item.item_id)}'''
+        image_file = is_image_file(file_path)
+        preview_url = f"/items/{item.item_id}/__preview" + ("/" + quote_path(relative_path) if relative_path.parts else "") if image_file else raw
+        navigation = self.image_navigation(item, file_path) if image_file else None
+        preview = self.preview_html(file_path, preview_url, content_type, navigation)
+        open_action = "" if image_file else f'<a class="btn" href="{html.escape(preview_url)}" target="_blank">查看</a>'
+        body = f'''<section class="card"><div class="hero"><div class="crumbs"><a href="/">全部共享</a><span>/</span><span>{html.escape(file_path.name)}</span></div><div class="headline"><div><h2>{html.escape(file_path.name)}</h2><div class="meta">{html.escape(content_type)} · {human_size(file_path.stat().st_size)}</div></div><div class="actions">{open_action}<a class="btn primary" href="{raw}?download=1" download="{html.escape(file_path.name)}">下载原文件</a></div></div></div>{preview}</section>{chat_html(item.item_id)}'''
         self.send_bytes(200, page(file_path.name, body), "text/html; charset=utf-8", send_body)
 
-    def preview_html(self, file_path: Path, raw: str, content_type: str) -> str:
-        if content_type.startswith("image/"): return f'<div class="preview"><img src="{raw}" alt=""></div>'
-        if content_type.startswith("video/"): return f'<div class="preview"><video controls preload="metadata" src="{raw}"></video></div>'
-        if content_type.startswith("audio/"): return f'<div class="preview"><audio controls preload="metadata" src="{raw}"></audio></div>'
-        if content_type == "application/pdf": return f'<div class="preview"><iframe src="{raw}" width="100%" height="680"></iframe></div>'
+    def image_navigation(self, item: ShareItem, file_path: Path) -> tuple[str, str, int, int]:
+        images = [file_path]
+        if item.path.is_dir():
+            try:
+                images = sorted(
+                    (child for child in file_path.parent.iterdir() if child.is_file() and safe_child(child, item.path) and is_image_file(child)),
+                    key=lambda child: child.name.casefold(),
+                )
+            except OSError:
+                images = [file_path]
+        current = file_path.resolve()
+        index = next((position for position, image in enumerate(images) if image.resolve() == current), 0)
+
+        def href(position: int) -> str:
+            if not 0 <= position < len(images) or item.path.is_file():
+                return ""
+            return f"/items/{item.item_id}/{quote_path(images[position].relative_to(item.path))}"
+
+        return href(index - 1), href(index + 1), index + 1, len(images)
+
+    def preview_html(self, file_path: Path, preview_url: str, content_type: str, navigation: Optional[tuple[str, str, int, int]] = None) -> str:
+        if content_type.startswith("image/"):
+            previous, following, index, total = navigation or ("", "", 1, 1)
+            previous_button = f'<a class="btn" href="{html.escape(previous)}">← 上一张</a>' if previous else '<span class="btn disabled">← 上一张</span>'
+            following_button = f'<a class="btn" href="{html.escape(following)}">下一张 →</a>' if following else '<span class="btn disabled">下一张 →</span>'
+            return f'''<div class="preview image-viewer" data-image-viewer data-prev="{html.escape(previous)}" data-next="{html.escape(following)}"><div class="image-tools"><button class="btn" type="button" data-image-zoom-out aria-label="缩小图片">－ 缩小</button><span class="image-zoom-value" data-image-zoom-value>100%</span><button class="btn" type="button" data-image-zoom-in aria-label="放大图片">放大 ＋</button></div><div class="image-stage"><div class="image-canvas"><img src="{html.escape(preview_url)}" alt="{html.escape(file_path.name)}"></div></div><div class="image-pager">{previous_button}<span class="image-count">{index} / {total} · 键盘 ← → 翻阅</span>{following_button}</div></div>'''
+        if content_type.startswith("video/"): return f'<div class="preview"><video controls preload="metadata" src="{preview_url}"></video></div>'
+        if content_type.startswith("audio/"): return f'<div class="preview"><audio controls preload="metadata" src="{preview_url}"></audio></div>'
+        if content_type == "application/pdf": return f'<div class="preview"><iframe src="{preview_url}" width="100%" height="680"></iframe></div>'
         if (content_type.startswith("text/") or file_path.suffix.lower() in TEXT_FILE_EXTENSIONS) and file_path.stat().st_size <= PREVIEW_MAX_BYTES:
             return f'<div class="preview"><pre>{html.escape(file_path.read_text(encoding="utf-8", errors="replace"))}</pre></div>'
         return '<div class="empty">此类型不在页面内预读，避免大文件占用浏览器内存。</div>'
+
+    def send_image_preview(self, file_path: Path, parsed: urllib.parse.SplitResult, send_body: bool) -> None:
+        if file_path.suffix.lower() not in HEIF_FILE_EXTENSIONS:
+            self.send_file(file_path, send_body)
+            return
+        size = (urllib.parse.parse_qs(parsed.query).get("size") or [""])[0]
+        max_dimension = IMAGE_THUMBNAIL_MAX_DIMENSION if size == "thumb" else IMAGE_PREVIEW_MAX_DIMENSION
+        try:
+            body = render_heif_preview(file_path, max_dimension)
+        except (OSError, RuntimeError, ValueError) as error:
+            self.send_error(500, str(error))
+            return
+        self.send_bytes(200, body, "image/jpeg", send_body)
 
     def send_file(self, file_path: Path, send_body: bool, query: str = "") -> None:
         size = file_path.stat().st_size

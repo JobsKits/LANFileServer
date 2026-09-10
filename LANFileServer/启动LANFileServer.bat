@@ -100,7 +100,7 @@ call :log "未检测到虚拟环境，开始创建：%VENV_DIR%"
 exit /b %ERRORLEVEL%
 
 :runtime_dependencies_ready
-"%PYTHON_BIN%" -c "import PySide6" >nul 2>nul
+"%PYTHON_BIN%" -c "import PIL, PySide6, pillow_heif, qrcode" >nul 2>nul
 exit /b %ERRORLEVEL%
 
 :install_missing_dependencies
@@ -114,7 +114,7 @@ call :log "运行依赖缺失，开始安装 requirements.txt。"
 "%PYTHON_BIN%" -m pip install -r "%REQUIREMENTS_FILE%" >> "%LOG_FILE%" 2>&1 || exit /b 1
 call :runtime_dependencies_ready
 if not "%ERRORLEVEL%"=="0" (
-    call :log "错误：依赖安装后仍无法导入 PySide6，请查看日志：%LOG_FILE%"
+    call :log "错误：依赖安装后仍不完整，请查看日志：%LOG_FILE%"
     exit /b 1
 )
 exit /b 0
