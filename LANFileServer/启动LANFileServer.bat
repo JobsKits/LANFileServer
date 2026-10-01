@@ -5,7 +5,7 @@ setlocal EnableExtensions
 rem 脚本自述：
 rem - 脚本名称：启动LANFileServer.bat
 rem - 核心用途：Windows 一键准备 Python 运行环境，并启动 LANFileServer 图形界面；内部保留 EXE 打包能力。
-rem - 影响范围：日常启动会创建或复用 .venv，并按 requirements.txt 安装运行依赖；build-exe 模式会生成 dist\LANFileServer.exe。
+rem - 影响范围：日常启动会创建或复用 .venv，并按 requirements.txt 安装运行依赖；build-exe 模式会生成 dist\YYYY.MM.DD HH-mm-ss\LANFileServer.exe。
 rem - 运行提示：双击默认启动程序，不需要手动 cd 或执行其它脚本。
 
 set "SCRIPT_DIR=%~dp0"
@@ -23,7 +23,7 @@ call :run_requested_mode %*
 set "EXIT_CODE=%ERRORLEVEL%"
 echo.
 echo 日志位置：%LOG_FILE%
-pause
+if not "%EXIT_CODE%"=="0" pause
 exit /b %EXIT_CODE%
 
 :log
@@ -36,6 +36,7 @@ call :log "============================== 脚本自述 =========================
 call :log "当前脚本：%~f0"
 call :log "核心用途：双击 .bat，一键启动 LANFileServer。"
 call :log "影响范围：会创建或复用 %VENV_DIR%，首次运行可能通过 pip 安装 PySide6。"
+call :log "构建产物按本机年月日时分秒保存到 dist/YYYY.MM.DD HH-mm-ss/（例如 2020.06.04 12-23-21），同次构建共用一个时间目录。"
 call :log "内部能力：传入 build-exe 参数时，可用同一个 .bat 生成 Windows EXE。"
 call :log "======================================================================="
 exit /b 0
@@ -109,8 +110,8 @@ if "%ERRORLEVEL%"=="0" (
     call :log "运行依赖已就绪。"
     exit /b 0
 )
+call :confirm_required_install "Missing runtime dependencies" || exit /b 1
 call :log "运行依赖缺失，开始安装 requirements.txt。"
-"%PYTHON_BIN%" -m pip install --upgrade pip >> "%LOG_FILE%" 2>&1 || exit /b 1
 "%PYTHON_BIN%" -m pip install -r "%REQUIREMENTS_FILE%" >> "%LOG_FILE%" 2>&1 || exit /b 1
 call :runtime_dependencies_ready
 if not "%ERRORLEVEL%"=="0" (
@@ -120,7 +121,7 @@ if not "%ERRORLEVEL%"=="0" (
 exit /b 0
 
 :build_dependencies_ready
-"%PYTHON_BIN%" -c "import PyInstaller" >nul 2>nul
+"%PYTHON_BIN%" -c "import PIL, PySide6, pillow_heif, qrcode, PyInstaller" >nul 2>nul
 exit /b %ERRORLEVEL%
 
 :install_missing_build_dependencies
@@ -133,9 +134,10 @@ if "%ERRORLEVEL%"=="0" (
     call :log "打包依赖已就绪。"
     exit /b 0
 )
+call :confirm_required_install "Missing build dependencies" || exit /b 1
 call :log "打包依赖缺失，开始安装 requirements-build.txt。"
-"%PYTHON_BIN%" -m pip install --upgrade pip >> "%LOG_FILE%" 2>&1 || exit /b 1
 "%PYTHON_BIN%" -m pip install -r "%BUILD_REQUIREMENTS_FILE%" >> "%LOG_FILE%" 2>&1 || exit /b 1
+call :build_dependencies_ready || exit /b 1
 exit /b 0
 
 :check_python_entry
@@ -151,12 +153,38 @@ popd >nul
 exit /b %APP_EXIT%
 
 :build_windows_exe
+for %%I in ("%SCRIPT_DIR%..") do set "DELIVERY_DIR=%%~fI"
+set "DIST_ROOT=%DELIVERY_DIR%\dist"
+set "DIST_DIR=%DIST_ROOT%"
+"%PYTHON_BIN%" "%SCRIPT_DIR%scripts\artifact_shortcuts.py" --root "%DELIVERY_DIR%" --clear || exit /b 1
 pushd "%SCRIPT_DIR%" >nul
 call :log "开始打包 Windows EXE。"
-"%PYTHON_BIN%" -m PyInstaller --noconfirm --clean --windowed --onefile --name "%APP_NAME%" "%ENTRY_FILE%" >> "%LOG_FILE%" 2>&1
+fsutil reparsepoint query "%DIST_ROOT%" >nul 2>nul
+if not errorlevel 1 exit /b 1
+if exist "%DIST_ROOT%" rmdir /s /q "%DIST_ROOT%"
+if exist "%DIST_ROOT%" (popd & exit /b 1)
+set "BUILD_STAMP="
+for /f "delims=" %%T in ('powershell -NoProfile -Command "Get-Date -Format 'yyyy.MM.dd HH-mm-ss'"') do set "BUILD_STAMP=%%T"
+if not defined BUILD_STAMP (popd & exit /b 1)
+set "DIST_DIR=%DIST_ROOT%\%BUILD_STAMP%"
+echo Build time (YYYY.MM.DD HH-mm-ss): %BUILD_STAMP%
+"%PYTHON_BIN%" -m PyInstaller --noconfirm --clean --distpath "%DIST_DIR%" --windowed --onefile --name "%APP_NAME%" "%ENTRY_FILE%" >> "%LOG_FILE%" 2>&1
 set "BUILD_EXIT=%ERRORLEVEL%"
 if "%BUILD_EXIT%"=="0" (
-    call :log "EXE 已生成：%SCRIPT_DIR%dist\%APP_NAME%.exe"
+    if not exist "%DIST_DIR%\%APP_NAME%.exe" (popd & exit /b 1)
+    call :log "EXE 已生成：%DIST_DIR%\%APP_NAME%.exe"
+    "%PYTHON_BIN%" "%SCRIPT_DIR%scripts\artifact_shortcuts.py" --root "%DELIVERY_DIR%" "%DIST_DIR%\%APP_NAME%.exe" || exit /b 1
+    start "" explorer.exe "%DIST_DIR%"
+    start "" /D "%DIST_DIR%" "%DIST_DIR%\%APP_NAME%.exe"
 )
 popd >nul
 exit /b %BUILD_EXIT%
+
+:confirm_required_install
+rem ReadLine 保留空格，并把 EOF 当成取消。
+powershell -NoProfile -Command "[Console]::Write('%~1 (Enter to install; any character to cancel): '); $answer = [Console]::ReadLine(); if ($null -eq $answer -or $answer.Length -gt 0) { exit 1 }; exit 0"
+if errorlevel 1 (
+  echo Dependency installation cancelled. Stopping current task.
+  exit /b 1
+)
+exit /b 0

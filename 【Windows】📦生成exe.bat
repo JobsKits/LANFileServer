@@ -8,9 +8,10 @@ if not exist "%PROJECT_LAUNCHER%" set "PROJECT_LAUNCHER=%SCRIPT_DIR%..\LANFileSe
 
 if not exist "%PROJECT_LAUNCHER%" (
     echo 未找到项目启动器：%PROJECT_LAUNCHER%
-    pause
+    echo Build clears old dist. On success, reveal output and launch the packaged app.
+pause
     exit /b 1
 )
 
-call "%PROJECT_LAUNCHER%" %*
+call "%PROJECT_LAUNCHER%" build-exe %*
 exit /b %ERRORLEVEL%

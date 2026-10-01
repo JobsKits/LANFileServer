@@ -23,7 +23,7 @@
 ├── README.md
 ├── 【MacOS】📦生成dmg.command
 ├── 【Windows】📦生成exe.bat
-├── LANFileServer-macOS-universal2.dmg
+├── dist/YYYY.MM.DD HH-mm-ss/LANFileServer-macOS-universal2.dmg
 └── LANFileServer/
     ├── LANFileServer.py
     ├── pyproject.toml
@@ -43,10 +43,10 @@
 ```
 
 - `./README.md`：当前外层目录说明。
-- `./【MacOS】📦生成dmg.command`：macOS 外层入口，双击后转交给 `./LANFileServer/启动LANFileServer.command`，并生成 `./LANFileServer-macOS-universal2.dmg`。
+- `./【MacOS】📦生成dmg.command`：macOS 外层入口，双击后转交给 `./LANFileServer/启动LANFileServer.command`，并生成 `./dist/YYYY.MM.DD HH-mm-ss/LANFileServer-macOS-universal2.dmg`。
 - `./【Windows】📦生成exe.bat`：Windows 外层入口，双击后转交给 `./LANFileServer/启动LANFileServer.bat`。
-- `./LANFileServer-macOS-universal2.dmg`：macOS 可分发安装包，兼容 Intel 和 Apple Silicon。
-- `./LANFileServer/`：内部项目目录，保存源码、依赖、构建脚本、`.app` 产物和项目级 README。
+- `./dist/YYYY.MM.DD HH-mm-ss/LANFileServer-macOS-universal2.dmg`：macOS 可分发安装包，兼容 Intel 和 Apple Silicon。
+- `./LANFileServer/`：内部项目目录，保存源码、依赖、构建脚本和项目级 README；`.app` 与安装包保存到外层时间目录。
 
 ## 二、运行方式 <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a>
 
@@ -67,7 +67,7 @@
 - 内部启动器会准备双架构构建环境、安装或复用依赖、打包 `.app`，最后在外层目录生成：
 
   ```text
-  ./LANFileServer-macOS-universal2.dmg
+  ./dist/YYYY.MM.DD HH-mm-ss/LANFileServer-macOS-universal2.dmg
   ```
 
 - 黑色终端窗口是打包窗口。看到 `DMG 已生成` 后，可以关闭这个窗口。
@@ -122,8 +122,8 @@
 | --- | --- |
 | macOS 外层脚本日志 | 系统临时目录中的 `【MacOS】📦生成dmg-desktop.log` |
 | macOS 内部构建日志 | 系统临时目录中的 `启动LANFileServer.log` |
-| macOS DMG | `./LANFileServer-macOS-universal2.dmg` |
-| macOS App 产物 | `./LANFileServer/dist/LANFileServer.app` |
+| macOS DMG | `./dist/YYYY.MM.DD HH-mm-ss/LANFileServer-macOS-universal2.dmg` |
+| macOS App 产物 | `./dist/YYYY.MM.DD HH-mm-ss/LANFileServer.app` |
 | 内部项目说明 | `./LANFileServer/README.md` |
 
 ## 五、风险说明 <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a>
@@ -183,5 +183,13 @@ Uploads/
 如果同名文件已经存在，程序会自动改成 `文件名 (1).扩展名` 这类形式。
 
 如果上传的是文件夹，文件夹内的相对层级会保留在 `Uploads/` 下面。
+
+打包前会清理该应用工程的旧 `dist` 产物，清理失败则停止；成功后自动打开当前平台产物的磁盘位置并运行本次生成的 APP / EXE，结尾无需回车。失败时不启动软件；运行前的防误触确认保留。
+
+必需依赖缺失时，直接回车联网安装；输入任意字符后回车取消整个流程。安装失败或复检仍不可用时停止，不继续清理旧产物或打包。健康依赖直接复用；可选升级和词库更新仍为回车跳过、任意字符执行。
+
+第一层交付目录与平台打包脚本同层保存 `dist/`，以及最新 APP / DMG 的相对符号链接（Mac）或 EXE / 分发包的 `.lnk`（Windows）。双击快捷方式即可接触成品，真实文件保留在 `dist/`；成功构建自动更新入口，清理旧产物时移除对应旧入口。尚无成品时不生成无效快捷方式。
+
+构建产物使用本机本地构建时间，格式为 `YYYY.MM.DD HH-mm-ss`（年月日时分秒），例如 `2020.06.04 12-23-21`。每次构建的 APP、DMG、EXE、ZIP 和配套文件统一保存到交付层 `./dist/YYYY.MM.DD HH-mm-ss/`，同次构建只取一次时间；第一层快捷方式指向本次时间目录，成功后打开该目录并启动其中的软件。旧产物沿用原有清理规则；历史产物缺少可靠构建时间时，不补写推测时间。
 
 <a id="🔚" href="#前言" style="font-size:17px; color:green; font-weight:bold;">我是有底线的➤点我回到首页</a>

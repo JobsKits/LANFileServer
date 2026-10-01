@@ -2,7 +2,7 @@
 # 脚本自述：
 # - 脚本名称：启动LANFileServer.command
 # - 核心用途：一键准备 Python 打包环境，并生成可安装的 LANFileServer.dmg。
-# - 影响范围：会创建或复用 .venv / .venv-universal2，安装打包依赖，并生成 dist/*.app 与外层目录的 *.dmg。
+# - 影响范围：会创建或复用 .venv / .venv-universal2，安装打包依赖，并生成 dist/*.app 与工程 dist 中的 *.dmg。
 # - 运行提示：双击后直接进入 DMG 打包流程，不需要手动 cd 或输入多条命令。
 
 setopt NO_NOMATCH
@@ -24,7 +24,10 @@ UNIVERSAL_VENV_DIR="${PROJECT_DIR}/.venv-universal2"
 REQUIREMENTS_FILE="${PROJECT_DIR}/requirements.txt"
 BUILD_REQUIREMENTS_FILE="${PROJECT_DIR}/requirements-build.txt"
 TARGET_ARCH="${TARGET_ARCH:-universal2}"
-DMG_OUTPUT_DIR="${LAN_FILE_SERVER_OUTPUT_DIR:-$(cd "${PROJECT_DIR}/.." && pwd)}"
+DELIVERY_DIR="$(cd "${PROJECT_DIR}/.." && pwd)"
+DIST_ROOT="${DELIVERY_DIR}/dist"
+DIST_DIR="$DIST_ROOT"
+DMG_OUTPUT_DIR="$DIST_DIR"
 
 log()            { echo -e "$1" | tee -a "$LOG_FILE"; }
 success_echo()   { log "\033[1;32m✔ $1\033[0m"; }
@@ -46,7 +49,9 @@ show_script_intro() {
   highlight_echo "============================== 脚本自述 =============================="
   note_echo "当前脚本：${SCRIPT_PATH}"
   note_echo "核心用途：自动进入项目目录，准备对应架构的虚拟环境，安装缺失依赖，并生成 ${APP_NAME}.dmg。"
-  warn_echo "影响范围：会创建或复用 .venv / .venv-universal2，生成 ${PROJECT_DIR}/dist 与 ${DMG_OUTPUT_DIR}/*.dmg。"
+  note_echo "构建产物按本机年月日时分秒保存到 dist/YYYY.MM.DD HH-mm-ss/（例如 2020.06.04 12-23-21），同次构建共用一个时间目录。"
+  warn_echo "打包前清理工程旧 dist；成功后定位产物并启动本机 APP。"
+  warn_echo "影响范围：会创建或复用 .venv / .venv-universal2，生成 ${DIST_DIR} 与 ${DMG_OUTPUT_DIR}/*.dmg。"
   gray_echo "日志位置：${LOG_FILE}"
   highlight_echo "======================================================================="
   echo ""
@@ -100,6 +105,12 @@ select_macos_build_python() {
   PYTHON_BIN="${VENV_DIR}/bin/python"
   success_echo "已选择 universal2 Python：${universal_python}"
 }
+# 必需依赖缺失时回车安装，任意字符取消整个流程。
+confirm_required_install() {
+  local answer=""
+  IFS= read -r "?${1}（直接回车安装；输入任意字符后回车取消）：" answer || { print -u2 '没有交互输入，停止依赖安装。'; exit 1; }
+  [[ -z "$answer" ]] || { print -u2 '已取消依赖安装，停止当前流程。'; exit 1; }
+}
 # 判断运行依赖是否已经可用。
 runtime_dependencies_ready() {
   "${PYTHON_BIN}" - <<'PY' >/dev/null 2>&1
@@ -113,8 +124,8 @@ install_missing_dependencies() {
     success_echo "运行依赖已就绪。"
     return 0
   fi
+  confirm_required_install "缺少运行依赖，需要联网补齐"
   note_echo "运行依赖缺失，开始安装 requirements.txt。"
-  "${PYTHON_BIN}" -m pip install --upgrade pip 2>&1 | tee -a "$LOG_FILE"
   "${PYTHON_BIN}" -m pip install -r "${REQUIREMENTS_FILE}" 2>&1 | tee -a "$LOG_FILE"
   if ! runtime_dependencies_ready; then
     error_echo "依赖安装后仍不完整，请查看日志：${LOG_FILE}"
@@ -124,7 +135,7 @@ install_missing_dependencies() {
 # 判断打包依赖是否已经可用。
 build_dependencies_ready() {
   "${PYTHON_BIN}" - <<'PY' >/dev/null 2>&1
-import PyInstaller
+import PIL, PySide6, pillow_heif, qrcode, PyInstaller
 PY
 }
 # 安装缺失的打包依赖。
@@ -137,9 +148,10 @@ install_missing_build_dependencies() {
     error_echo "未找到打包依赖文件：${BUILD_REQUIREMENTS_FILE}"
     exit 1
   fi
+  confirm_required_install "缺少打包依赖，需要联网补齐"
   note_echo "打包依赖缺失，开始安装 requirements-build.txt。"
-  "${PYTHON_BIN}" -m pip install --upgrade pip 2>&1 | tee -a "$LOG_FILE" || exit 1
   "${PYTHON_BIN}" -m pip install -r "${BUILD_REQUIREMENTS_FILE}" 2>&1 | tee -a "$LOG_FILE" || exit 1
+  build_dependencies_ready || { error_echo "依赖安装后仍不可用"; exit 1; }
 }
 # 检查 Python 入口文件语法。
 check_python_entry() {
@@ -167,7 +179,7 @@ build_macos_app_with_arch() {
   local build_arch="$1"
   cd "${PROJECT_DIR}" || exit 1
   note_echo "开始打包 macOS .app，目标架构：${build_arch}"
-  "${PYTHON_BIN}" -m PyInstaller --noconfirm --clean --windowed --name "${APP_NAME}" --target-arch "${build_arch}" --add-data "${PROJECT_DIR}/../icon.png:." "${ENTRY_FILE}" 2>&1 | tee -a "$LOG_FILE"
+  "${PYTHON_BIN}" -m PyInstaller --noconfirm --clean --distpath "$DIST_DIR" --windowed --name "${APP_NAME}" --target-arch "${build_arch}" --add-data "${PROJECT_DIR}/../icon.png:." "${ENTRY_FILE}" 2>&1 | tee -a "$LOG_FILE"
 }
 # 获取当前机器原生架构。
 get_native_arch() {
@@ -188,8 +200,8 @@ build_macos_app() {
 }
 # 使用 hdiutil 把 .app 封装成 DMG。
 create_macos_dmg() {
-  local app_path="${PROJECT_DIR}/dist/${APP_NAME}.app"
-  local staging_dir="${PROJECT_DIR}/dist/dmg-staging"
+  local app_path="${DIST_DIR}/${APP_NAME}.app"
+  local staging_dir="${DIST_DIR}/dmg-staging"
   local dmg_path="${DMG_OUTPUT_DIR}/${APP_NAME}-macOS-${TARGET_ARCH}.dmg"
   if [[ ! -d "${app_path}" ]]; then
     error_echo "未找到 .app：${app_path}"
@@ -208,7 +220,9 @@ create_macos_dmg() {
 reveal_dmg_in_finder() {
   local dmg_path="${DMG_OUTPUT_DIR}/${APP_NAME}-macOS-${TARGET_ARCH}.dmg"
   if [[ -f "${dmg_path}" ]]; then
-    open -R "${dmg_path}" >/dev/null 2>&1 || true
+    "${PYTHON_BIN}" "${PROJECT_DIR}/scripts/artifact_shortcuts.py" --root "$DELIVERY_DIR" "${DIST_DIR}/${APP_NAME}.app" "$dmg_path" || return 1
+    open "$DIST_DIR" || return 1
+    open "${DIST_DIR}/${APP_NAME}.app" || return 1
   fi
 }
 # 执行日常一键启动流程。
@@ -219,6 +233,16 @@ run_app_flow() {
   check_python_entry
   launch_app
 }
+# 清理固定工程 dist，拒绝符号链接输出目录。
+clean_dist_outputs() {
+  [[ ! -L "${DIST_ROOT}" ]] || { error_echo "拒绝清理符号链接 dist"; exit 1; }
+  "${PYTHON_BIN}" "${PROJECT_DIR}/scripts/artifact_shortcuts.py" --root "$DELIVERY_DIR" --clear || exit 1
+  rm -rf -- "$DIST_ROOT" || exit 1
+  BUILD_STAMP="$(date "+%Y.%m.%d %H-%M-%S")"
+  DIST_DIR="${DIST_ROOT}/${BUILD_STAMP}"
+  DMG_OUTPUT_DIR="$DIST_DIR"
+  note_echo "构建时间（年月日时分秒）：${BUILD_STAMP}"
+}
 # 执行内部 macOS DMG 打包流程。
 run_macos_dmg_flow() {
   check_environment
@@ -227,6 +251,7 @@ run_macos_dmg_flow() {
   prepare_virtualenv
   install_missing_build_dependencies
   check_python_entry
+  clean_dist_outputs
   build_macos_app
   create_macos_dmg
   reveal_dmg_in_finder

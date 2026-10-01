@@ -60,3 +60,8 @@ output/
 # IDE
 .idea/
 .vscode/
+
+# 打包产物快捷方式（本机生成）
+*.lnk
+*.app
+*.zip
