@@ -12,7 +12,7 @@
 
 ## 一、运行方式 <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a>
 
-### 1.1、macOS
+### 1.1、macOS <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a>
 
 - 双击外层脚本会生成 `LANFileServer-macOS-架构.dmg`：
 
@@ -25,7 +25,7 @@
 - 默认使用系统双架构 [**Python**](https://www.python.org) 和独立的 `.venv-universal2` 生成 `universal2` 包，同时兼容 Intel 与 Apple Silicon。
 - 第一次构建会下载双架构 [**PySide6**](https://doc.qt.io/qtforpython-6/) 依赖，后续构建会直接复用；只有系统没有双架构 Python 时才回退为当前 Mac 原生架构。
 
-### 1.2、Windows
+### 1.2、Windows <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a>
 
 - 双击外层脚本即可：
 

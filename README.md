@@ -50,7 +50,7 @@
 
 ## 二、运行方式 <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a>
 
-### 2.1、macOS
+### 2.1、macOS <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a>
 
 - 双击外层脚本：
 
@@ -73,7 +73,7 @@
 - 黑色终端窗口是打包窗口。看到 `DMG 已生成` 后，可以关闭这个窗口。
 - `.dmg` 可以直接打开运行里面的 App，也可以把 App 拖入系统 `Applications` 文件夹。
 
-### 2.2、Windows
+### 2.2、Windows <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a>
 
 - 双击外层脚本：
 
@@ -140,7 +140,7 @@
 
 ## 六、常见问题 <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a>
 
-### 6.1、双击外层脚本提示找不到项目启动器
+### 6.1、双击外层脚本提示找不到项目启动器 <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a>
 
 确认当前目录里存在：
 
@@ -150,7 +150,7 @@
 
 如果移动了目录，需要保持外层脚本和 `./LANFileServer/` 文件夹在同一个父目录里。
 
-### 6.2、macOS 提示脚本没有执行权限
+### 6.2、macOS 提示脚本没有执行权限 <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a>
 
 在当前目录打开终端后执行：
 
@@ -159,11 +159,11 @@ chmod +x ./【MacOS】📦生成dmg.command
 chmod +x ./LANFileServer/启动LANFileServer.command
 ```
 
-### 6.3、端口被占用
+### 6.3、端口被占用 <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a>
 
 在界面里换一个端口，或先停止占用当前端口的其它程序。常见可尝试端口包括 `8081`、`8090`、`9000`。
 
-### 6.4、同一局域网其它设备打不开地址
+### 6.4、同一局域网其它设备打不开地址 <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a>
 
 检查几件事：
 
@@ -172,7 +172,7 @@ chmod +x ./LANFileServer/启动LANFileServer.command
 3. 发送给对方的是否是蓝色项目地址，而不是只到端口首页的地址。
 4. 服务是否已经启动，左侧项目是否显示已启动。
 
-### 6.5、上传的文件在哪里
+### 6.5、上传的文件在哪里 <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a>
 
 上传文件固定进入对应共享文件夹里的：
 
