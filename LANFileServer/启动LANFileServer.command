@@ -5,6 +5,29 @@
 # - 影响范围：会创建或复用 .venv / .venv-universal2，安装打包依赖，并生成 dist/*.app 与工程 dist 中的 *.dmg。
 # - 运行提示：双击后直接进入 DMG 打包流程，不需要手动 cd 或输入多条命令。
 
+# 仅渲染自述：标题红色加粗，编号正文蓝色常规字重；非彩色终端输出纯文本。
+jobs_intro_style() {
+  local intro_color=0
+  if [ -t 1 ] && [ -n "${TERM:-}" ] && [ "${TERM:-}" != dumb ] &&
+     [ -z "${NO_COLOR+x}" ] && [ "${PLAIN_OUTPUT:-0}" != 1 ] &&
+     [ "${IS_SOURCETREE_RUNTIME:-0}" != 1 ]; then
+    intro_color=1
+  fi
+  /usr/bin/awk -v color="$intro_color" -v role="${1:-body}" '
+    BEGIN { esc = sprintf("%c", 27) }
+    {
+      gsub(esc "\\[[0-9;]*m", "")
+      gsub(/\\(033|e|x1[bB])\[[0-9;]*m/, "")
+      if (!color || $0 ~ /^[[:space:]]*$/) { print; next }
+      numbered = ($0 ~ /^[[:space:]➤ℹ🔹✔⚠]*([0-9]+[、.)）]|[0-9]+️⃣|[-•])/)
+      heading = ($0 ~ /^[[:space:]]*#{1,6}[[:space:]]/ || $0 ~ /[：:][[:space:]]*$/ || $0 ~ /^[[:space:]]*[=━─-]{3}/)
+      title = (!numbered && (role == "title" || heading))
+      if (role == "auto" && !seen && !numbered) title = 1
+      if ($0 !~ /^[[:space:]]*[=━─-]+[[:space:]]*$/) seen = 1
+      printf "%s%s%s\n", esc (title ? "[1;31m" : "[0;34m"), $0, esc "[0m"
+    }
+  '
+}
 setopt NO_NOMATCH
 setopt PIPE_FAIL
 
@@ -40,21 +63,21 @@ gray_echo()      { log "\033[0;90m$1\033[0m"; }
 # 打印脚本内置自述，并直接继续启动流程。
 show_script_intro() {
   if [[ "${LAN_FILE_SERVER_CONFIRMED:-0}" == "1" ]]; then
-    note_echo "已由外层入口确认，继续执行 DMG 打包流程。"
+    note_echo "已由外层入口确认，继续执行 DMG 打包流程。" | jobs_intro_style body
     return 0
   fi
   if [[ -t 1 && -n "${TERM:-}" && "${TERM:-}" != "dumb" ]]; then
     clear
   fi
-  highlight_echo "============================== 脚本自述 =============================="
-  note_echo "当前脚本：${SCRIPT_PATH}"
-  note_echo "核心用途：自动进入项目目录，准备对应架构的虚拟环境，安装缺失依赖，并生成 ${APP_NAME}.dmg。"
-  note_echo "构建产物按本机年月日时分秒保存到 dist/YYYY.MM.DD HH-mm-ss/（例如 2020.06.04 12-23-21），同次构建共用一个时间目录。"
-  warn_echo "打包前清理工程旧 dist；成功后定位产物并启动本机 APP。"
-  warn_echo "影响范围：会创建或复用 .venv / .venv-universal2，生成 ${DIST_DIR} 与 ${DMG_OUTPUT_DIR}/*.dmg。"
-  gray_echo "日志位置：${LOG_FILE}"
-  highlight_echo "======================================================================="
-  echo ""
+  highlight_echo "============================== 脚本自述 ==============================" | jobs_intro_style title
+  note_echo "当前脚本：${SCRIPT_PATH}" | jobs_intro_style body
+  note_echo "核心用途：自动进入项目目录，准备对应架构的虚拟环境，安装缺失依赖，并生成 ${APP_NAME}.dmg。" | jobs_intro_style body
+  note_echo "构建产物按本机年月日时分秒保存到 dist/YYYY.MM.DD HH-mm-ss/（例如 2020.06.04 12-23-21），同次构建共用一个时间目录。" | jobs_intro_style body
+  warn_echo "打包前清理工程旧 dist；成功后定位产物并启动本机 APP。" | jobs_intro_style body
+  warn_echo "影响范围：会创建或复用 .venv / .venv-universal2，生成 ${DIST_DIR} 与 ${DMG_OUTPUT_DIR}/*.dmg。" | jobs_intro_style body
+  gray_echo "日志位置：${LOG_FILE}" | jobs_intro_style body
+  highlight_echo "=======================================================================" | jobs_intro_style title
+  echo "" | jobs_intro_style body
 }
 # 检查 Python 和项目入口文件是否存在。
 check_environment() {

@@ -5,6 +5,29 @@
 # - 影响范围：会转交给 LANFileServer 目录内的启动器，由它准备双架构打包环境、安装依赖并生成 DMG。
 # - 运行提示：双击后直接进入 DMG 打包流程；项目内启动器会记录完整日志。
 
+# 仅渲染自述：标题红色加粗，编号正文蓝色常规字重；非彩色终端输出纯文本。
+jobs_intro_style() {
+  local intro_color=0
+  if [ -t 1 ] && [ -n "${TERM:-}" ] && [ "${TERM:-}" != dumb ] &&
+     [ -z "${NO_COLOR+x}" ] && [ "${PLAIN_OUTPUT:-0}" != 1 ] &&
+     [ "${IS_SOURCETREE_RUNTIME:-0}" != 1 ]; then
+    intro_color=1
+  fi
+  /usr/bin/awk -v color="$intro_color" -v role="${1:-body}" '
+    BEGIN { esc = sprintf("%c", 27) }
+    {
+      gsub(esc "\\[[0-9;]*m", "")
+      gsub(/\\(033|e|x1[bB])\[[0-9;]*m/, "")
+      if (!color || $0 ~ /^[[:space:]]*$/) { print; next }
+      numbered = ($0 ~ /^[[:space:]➤ℹ🔹✔⚠]*([0-9]+[、.)）]|[0-9]+️⃣|[-•])/)
+      heading = ($0 ~ /^[[:space:]]*#{1,6}[[:space:]]/ || $0 ~ /[：:][[:space:]]*$/ || $0 ~ /^[[:space:]]*[=━─-]{3}/)
+      title = (!numbered && (role == "title" || heading))
+      if (role == "auto" && !seen && !numbered) title = 1
+      if ($0 !~ /^[[:space:]]*[=━─-]+[[:space:]]*$/) seen = 1
+      printf "%s%s%s\n", esc (title ? "[1;31m" : "[0;34m"), $0, esc "[0m"
+    }
+  '
+}
 setopt NO_NOMATCH
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-${(%):-%x}}")" && pwd)"
@@ -28,13 +51,13 @@ show_script_intro() {
   if [[ -t 1 && -n "${TERM:-}" && "${TERM:-}" != "dumb" ]]; then
     clear
   fi
-  highlight_echo "============================== 脚本自述 =============================="
-  note_echo "当前脚本：${SCRIPT_PATH}"
-  note_echo "核心用途：双击脚本，一键生成 LANFileServer.dmg。"
-  warn_echo "影响范围：会自动寻找 LANFileServer 项目目录，由项目启动器准备双架构环境、打包 .app 并生成 DMG。"
-  gray_echo "日志位置：${LOG_FILE}"
-  highlight_echo "======================================================================="
-  echo ""
+  highlight_echo "============================== 脚本自述 ==============================" | jobs_intro_style title
+  note_echo "当前脚本：${SCRIPT_PATH}" | jobs_intro_style body
+  note_echo "核心用途：双击脚本，一键生成 LANFileServer.dmg。" | jobs_intro_style body
+  warn_echo "影响范围：会自动寻找 LANFileServer 项目目录，由项目启动器准备双架构环境、打包 .app 并生成 DMG。" | jobs_intro_style body
+  gray_echo "日志位置：${LOG_FILE}" | jobs_intro_style body
+  highlight_echo "=======================================================================" | jobs_intro_style title
+  echo "" | jobs_intro_style body
 }
 # 自动寻找项目内启动器，兼容外层脚本被移动到子目录的情况。
 resolve_project_launcher() {
