@@ -22,8 +22,8 @@
 
 - 黑色运行窗口是打包过程窗口。打包时不要关闭；看到 `DMG 已生成` 后可以关闭。
 - 生成的 `.dmg` 会自动在 [**Finder**](https://support.apple.com/guide/mac-help/mchlp2605/mac) 中定位；用户可以直接打开 `.dmg` 里的 App，也可以把 App 拖入系统 `Applications` 文件夹。
-- 默认使用系统双架构 [**Python**](https://www.python.org) 和独立的 `.venv-universal2` 生成 `universal2` 包，同时兼容 Intel 与 Apple Silicon。
-- 第一次构建会下载双架构 [**PySide6**](https://doc.qt.io/qtforpython-6/) 依赖，后续构建会直接复用；只有系统没有双架构 Python 时才回退为当前 Mac 原生架构。
+- 默认使用 [**Homebrew**](https://brew.sh/) 管理的 [**Python**](https://www.python.org) 创建项目虚拟环境，按当前 Mac 的 Intel 或 Apple Silicon 架构打包。
+- 第一次构建按所选 Python 下载兼容的 [**PySide6**](https://doc.qt.io/qtforpython-6/) 依赖，后续复用健康环境；Brew Python 不具备双架构时明确使用本机架构。
 
 ### 1.2、Windows <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a>
 
@@ -83,5 +83,12 @@
 第一层交付目录与平台打包脚本同层保存 `dist/`，以及最新 APP / DMG 的相对符号链接（Mac）或 EXE / 分发包的 `.lnk`（Windows）。双击快捷方式即可接触成品，真实文件保留在 `dist/`；成功构建自动更新入口，清理旧产物时移除对应旧入口。尚无成品时不生成无效快捷方式。
 
 构建产物使用本机本地构建时间，格式为 `YYYY.MM.DD HH-mm-ss`（年月日时分秒），例如 `2020.06.04 12-23-21`。每次构建的 APP、DMG、EXE、ZIP 和配套文件统一保存到交付层 `../dist/YYYY.MM.DD HH-mm-ss/`，同次构建只取一次时间；第一层快捷方式指向本次时间目录，成功后打开该目录并启动其中的软件。旧产物沿用原有清理规则；历史产物缺少可靠构建时间时，不补写推测时间。
+
+
+## 四、Mac Python 环境自检 <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a>
+
+实际使用 Python 的 Mac 入口通过脚本内部的具名函数执行环境自检，完整自检实现随该脚本携带。先阅读自述并确认，再自检 [**Homebrew**](https://brew.sh/)：已有安装执行 `brew update`，只更新自身和配方索引，不全量升级其它软件；缺少时安装并复检。安装路径精确输入 `YES` 选择系统标准目录，其它输入或回车选择用户目录；失败停止，不自动改换路线。新系统缺少 Command Line Tools 时按系统提示完成安装后重试。
+
+[**Python**](https://www.python.org) 使用 Homebrew 配方；实际版本和标准库满足工具要求时复用，不兼容时才安装 / 升级并复检。必需修复直接回车执行，任意非空输入（含空格）、EOF 或非交互缺失环境均停止。旧虚拟环境不兼容时完整改名备份后重建，保留备份。Homebrew 安装路径选择、更新、Python 版本与健康检查均封装在实际执行脚本内部，不依赖外部环境支持库、同步脚本或父仓文件。Windows 入口保持原有平台环境流程；运行已打包成品无需准备构建环境。
 
 <a id="🔚" href="#前言" style="font-size:17px; color:green; font-weight:bold;">我是有底线的➤点我回到首页</a>

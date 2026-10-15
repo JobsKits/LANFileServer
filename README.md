@@ -23,7 +23,7 @@
 ├── README.md
 ├── 【MacOS】📦生成dmg.command
 ├── 【Windows】📦生成exe.bat
-├── dist/YYYY.MM.DD HH-mm-ss/LANFileServer-macOS-universal2.dmg
+├── dist/YYYY.MM.DD HH-mm-ss/LANFileServer-macOS-<本机架构>.dmg
 └── LANFileServer/
     ├── LANFileServer.py
     ├── pyproject.toml
@@ -43,9 +43,9 @@
 ```
 
 - `./README.md`：当前外层目录说明。
-- `./【MacOS】📦生成dmg.command`：macOS 外层入口，双击后转交给 `./LANFileServer/启动LANFileServer.command`，并生成 `./dist/YYYY.MM.DD HH-mm-ss/LANFileServer-macOS-universal2.dmg`。
+- `./【MacOS】📦生成dmg.command`：macOS 外层入口，双击后转交给 `./LANFileServer/启动LANFileServer.command`，并生成 `./dist/YYYY.MM.DD HH-mm-ss/LANFileServer-macOS-<本机架构>.dmg`。
 - `./【Windows】📦生成exe.bat`：Windows 外层入口，双击后转交给 `./LANFileServer/启动LANFileServer.bat`。
-- `./dist/YYYY.MM.DD HH-mm-ss/LANFileServer-macOS-universal2.dmg`：macOS 可分发安装包，兼容 Intel 和 Apple Silicon。
+- `./dist/YYYY.MM.DD HH-mm-ss/LANFileServer-macOS-<本机架构>.dmg`：macOS 可分发安装包，按构建机的 Intel 或 Apple Silicon 架构生成。
 - `./LANFileServer/`：内部项目目录，保存源码、依赖、构建脚本和项目级 README；`.app` 与安装包保存到外层时间目录。
 
 ## 二、运行方式 <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a>
@@ -64,10 +64,10 @@
   ./LANFileServer/启动LANFileServer.command
   ```
 
-- 内部启动器会准备双架构构建环境、安装或复用依赖、打包 `.app`，最后在外层目录生成：
+- 内部启动器会准备 Homebrew 管理的本机架构构建环境、安装或复用依赖、打包 `.app`，最后在外层目录生成：
 
   ```text
-  ./dist/YYYY.MM.DD HH-mm-ss/LANFileServer-macOS-universal2.dmg
+  ./dist/YYYY.MM.DD HH-mm-ss/LANFileServer-macOS-<本机架构>.dmg
   ```
 
 - 黑色终端窗口是打包窗口。看到 `DMG 已生成` 后，可以关闭这个窗口。
@@ -122,7 +122,7 @@
 | --- | --- |
 | macOS 外层脚本日志 | 系统临时目录中的 `【MacOS】📦生成dmg-desktop.log` |
 | macOS 内部构建日志 | 系统临时目录中的 `启动LANFileServer.log` |
-| macOS DMG | `./dist/YYYY.MM.DD HH-mm-ss/LANFileServer-macOS-universal2.dmg` |
+| macOS DMG | `./dist/YYYY.MM.DD HH-mm-ss/LANFileServer-macOS-<本机架构>.dmg` |
 | macOS App 产物 | `./dist/YYYY.MM.DD HH-mm-ss/LANFileServer.app` |
 | 内部项目说明 | `./LANFileServer/README.md` |
 
@@ -191,5 +191,12 @@ Uploads/
 第一层交付目录与平台打包脚本同层保存 `dist/`，以及最新 APP / DMG 的相对符号链接（Mac）或 EXE / 分发包的 `.lnk`（Windows）。双击快捷方式即可接触成品，真实文件保留在 `dist/`；成功构建自动更新入口，清理旧产物时移除对应旧入口。尚无成品时不生成无效快捷方式。
 
 构建产物使用本机本地构建时间，格式为 `YYYY.MM.DD HH-mm-ss`（年月日时分秒），例如 `2020.06.04 12-23-21`。每次构建的 APP、DMG、EXE、ZIP 和配套文件统一保存到交付层 `./dist/YYYY.MM.DD HH-mm-ss/`，同次构建只取一次时间；第一层快捷方式指向本次时间目录，成功后打开该目录并启动其中的软件。旧产物沿用原有清理规则；历史产物缺少可靠构建时间时，不补写推测时间。
+
+
+## 七、Mac Python 环境自检 <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a>
+
+实际使用 Python 的 Mac 入口通过脚本内部的具名函数执行环境自检，完整自检实现随该脚本携带。先阅读自述并确认，再自检 [**Homebrew**](https://brew.sh/)：已有安装执行 `brew update`，只更新自身和配方索引，不全量升级其它软件；缺少时安装并复检。安装路径精确输入 `YES` 选择系统标准目录，其它输入或回车选择用户目录；失败停止，不自动改换路线。新系统缺少 Command Line Tools 时按系统提示完成安装后重试。
+
+[**Python**](https://www.python.org) 使用 Homebrew 配方；实际版本和标准库满足工具要求时复用，不兼容时才安装 / 升级并复检。必需修复直接回车执行，任意非空输入（含空格）、EOF 或非交互缺失环境均停止。旧虚拟环境不兼容时完整改名备份后重建，保留备份。Homebrew 安装路径选择、更新、Python 版本与健康检查均封装在实际执行脚本内部，不依赖外部环境支持库、同步脚本或父仓文件。Windows 入口保持原有平台环境流程；运行已打包成品无需准备构建环境。
 
 <a id="🔚" href="#前言" style="font-size:17px; color:green; font-weight:bold;">我是有底线的➤点我回到首页</a>
