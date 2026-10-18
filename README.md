@@ -2,11 +2,36 @@
 
 ![Jobs出品，必属精品](https://picsum.photos/1500/400)
 
-[toc]
+<!-- jobs-toc:start -->
+<!-- jobs-toc:source {"v":2,"token":"[toc]"} -->
+<details>
+<summary>📚 目录（点击展开 / 收起）</summary>
+
+- [🔥 前言](#jobs-toc-heading-1)
+- [一、目录结构](#jobs-toc-heading-2)
+- [二、运行方式](#jobs-toc-heading-3)
+  - [【MacOS】📦生成dmg.command](#jobs-toc-heading-4)
+  - [【Windows】📦生成exe.bat](#jobs-toc-heading-5)
+- [三、使用说明](#jobs-toc-heading-6)
+- [四、日志与产物](#jobs-toc-heading-7)
+- [五、风险说明](#jobs-toc-heading-8)
+- [六、常见问题](#jobs-toc-heading-9)
+  - [6.1、双击外层脚本提示找不到项目启动器](#jobs-toc-heading-10)
+  - [6.2、macOS 提示脚本没有执行权限](#jobs-toc-heading-11)
+  - [6.3、端口被占用](#jobs-toc-heading-12)
+  - [6.4、同一局域网其它设备打不开地址](#jobs-toc-heading-13)
+  - [6.5、上传的文件在哪里](#jobs-toc-heading-14)
+- [七、Mac Python 环境自检](#jobs-toc-heading-15)
+- [八、本仓目录与脚本入口](#repository-layout-and-entrypoints)
+  - [启动LANFileServer.command](#jobs-toc-heading-17)
+  - [启动LANFileServer.bat](#jobs-toc-heading-18)
+
+</details>
+<!-- jobs-toc:end -->
 
 ---
 
-## 🔥 <font id=前言>前言</font>
+## <span id="jobs-toc-heading-1" data-jobs-toc="v2">🔥 <font id=前言>前言</font></span><!-- jobs-toc:heading-end -->
 
 ![image-20260628150158033](./assets/image-20260628150158033.png)
 
@@ -16,7 +41,7 @@
 
 
 
-## 一、目录结构 <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a>
+## <span id="jobs-toc-heading-2" data-jobs-toc="v2">一、目录结构 <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a></span><!-- jobs-toc:heading-end -->
 
 ```text
 .
@@ -48,9 +73,9 @@
 - `./dist/YYYY.MM.DD HH-mm-ss/LANFileServer-macOS-<本机架构>.dmg`：macOS 可分发安装包，按构建机的 Intel 或 Apple Silicon 架构生成。
 - `./LANFileServer/`：内部项目目录，保存源码、依赖、构建脚本和项目级 README；`.app` 与安装包保存到外层时间目录。
 
-## 二、运行方式 <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a>
+## <span id="jobs-toc-heading-3" data-jobs-toc="v2">二、运行方式 <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a></span><!-- jobs-toc:heading-end -->
 
-### [【MacOS】📦生成dmg.command](./【MacOS】📦生成dmg.command)
+### <span id="jobs-toc-heading-4" data-jobs-toc="v2">[【MacOS】📦生成dmg.command](./【MacOS】📦生成dmg.command)</span><!-- jobs-toc:heading-end -->
 
 > **目的：** 从外层目录一键生成 LANFileServer 的 macOS APP / DMG。
 
@@ -81,7 +106,7 @@
 - 黑色终端窗口是打包窗口。看到 `DMG 已生成` 后，可以关闭这个窗口。
 - `.dmg` 可以直接打开运行里面的 App，也可以把 App 拖入系统 `Applications` 文件夹。
 
-### [【Windows】📦生成exe.bat](./【Windows】📦生成exe.bat)
+### <span id="jobs-toc-heading-5" data-jobs-toc="v2">[【Windows】📦生成exe.bat](./【Windows】📦生成exe.bat)</span><!-- jobs-toc:heading-end -->
 
 > **目的：** 从外层目录生成 LANFileServer 的 Windows EXE。
 
@@ -105,7 +130,7 @@
 
 - 内部启动器会创建或复用 `.venv`、安装缺失依赖，然后启动图形界面。
 
-## 三、使用说明 <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a>
+## <span id="jobs-toc-heading-6" data-jobs-toc="v2">三、使用说明 <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a></span><!-- jobs-toc:heading-end -->
 
 1. 打开 `LANFileServer`。
 2. 把要暴露给局域网其它设备访问的文件或文件夹拖入左侧列表。
@@ -132,7 +157,7 @@
 - 没有启动服务且没有访问记录时，右侧访问记录区域会显示 `启动服务以后查看`。
 - 如果关闭窗口时仍有服务运行，程序会询问是否最小化到任务栏继续运行。
 
-## 四、日志与产物 <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a>
+## <span id="jobs-toc-heading-7" data-jobs-toc="v2">四、日志与产物 <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a></span><!-- jobs-toc:heading-end -->
 
 | 内容 | 文件或位置 |
 | --- | --- |
@@ -142,7 +167,7 @@
 | macOS App 产物 | `./dist/YYYY.MM.DD HH-mm-ss/LANFileServer.app` |
 | 内部项目说明 | `./LANFileServer/README.md` |
 
-## 五、风险说明 <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a>
+## <span id="jobs-toc-heading-8" data-jobs-toc="v2">五、风险说明 <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a></span><!-- jobs-toc:heading-end -->
 
 - 这个工具会把左侧列表里的文件 / 文件夹暴露给同一局域网内能访问当前端口的设备。
 - 不建议拖入隐私目录、系统目录、浏览器数据目录、密码文件或其它敏感资料。
@@ -154,9 +179,9 @@
 - 只要有项目选择非临时模式，程序会准备并使用本机 [**Nginx**](https://nginx.org/)；macOS 上可能通过 [**Homebrew**](https://brew.sh/) 准备依赖。
 - 外网 IP 只是展示当前出口 IP 和大致地理位置，不代表外网设备一定可以访问本机服务；跨公网访问还受路由器、防火墙、运营商网络和端口映射影响。
 
-## 六、常见问题 <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a>
+## <span id="jobs-toc-heading-9" data-jobs-toc="v2">六、常见问题 <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a></span><!-- jobs-toc:heading-end -->
 
-### 6.1、双击外层脚本提示找不到项目启动器 <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a>
+### <span id="jobs-toc-heading-10" data-jobs-toc="v2">6.1、双击外层脚本提示找不到项目启动器 <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a></span><!-- jobs-toc:heading-end -->
 
 确认当前目录里存在：
 
@@ -166,7 +191,7 @@
 
 如果移动了目录，需要保持外层脚本和 `./LANFileServer/` 文件夹在同一个父目录里。
 
-### 6.2、macOS 提示脚本没有执行权限 <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a>
+### <span id="jobs-toc-heading-11" data-jobs-toc="v2">6.2、macOS 提示脚本没有执行权限 <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a></span><!-- jobs-toc:heading-end -->
 
 在当前目录打开终端后执行：
 
@@ -175,11 +200,11 @@ chmod +x ./【MacOS】📦生成dmg.command
 chmod +x ./LANFileServer/启动LANFileServer.command
 ```
 
-### 6.3、端口被占用 <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a>
+### <span id="jobs-toc-heading-12" data-jobs-toc="v2">6.3、端口被占用 <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a></span><!-- jobs-toc:heading-end -->
 
 在界面里换一个端口，或先停止占用当前端口的其它程序。常见可尝试端口包括 `8081`、`8090`、`9000`。
 
-### 6.4、同一局域网其它设备打不开地址 <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a>
+### <span id="jobs-toc-heading-13" data-jobs-toc="v2">6.4、同一局域网其它设备打不开地址 <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a></span><!-- jobs-toc:heading-end -->
 
 检查几件事：
 
@@ -188,7 +213,7 @@ chmod +x ./LANFileServer/启动LANFileServer.command
 3. 发送给对方的是否是蓝色项目地址，而不是只到端口首页的地址。
 4. 服务是否已经启动，左侧项目是否显示已启动。
 
-### 6.5、上传的文件在哪里 <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a>
+### <span id="jobs-toc-heading-14" data-jobs-toc="v2">6.5、上传的文件在哪里 <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a></span><!-- jobs-toc:heading-end -->
 
 上传文件固定进入对应共享文件夹里的：
 
@@ -209,7 +234,7 @@ Uploads/
 构建产物使用本机本地构建时间，格式为 `YYYY.MM.DD HH-mm-ss`（年月日时分秒），例如 `2020.06.04 12-23-21`。每次构建的 APP、DMG、EXE、ZIP 和配套文件统一保存到交付层 `./dist/YYYY.MM.DD HH-mm-ss/`，同次构建只取一次时间；第一层快捷方式指向本次时间目录，成功后打开该目录并启动其中的软件。旧产物沿用原有清理规则；历史产物缺少可靠构建时间时，不补写推测时间。
 
 
-## 七、Mac Python 环境自检 <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a>
+## <span id="jobs-toc-heading-15" data-jobs-toc="v2">七、Mac Python 环境自检 <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a></span><!-- jobs-toc:heading-end -->
 
 实际使用 Python 的 Mac 入口通过脚本内部的具名函数执行环境自检，完整自检实现随该脚本携带。先阅读自述并确认，再自检 [**Homebrew**](https://brew.sh/)：已有安装执行 `brew update`，只更新自身和配方索引，不全量升级其它软件；缺少时安装并复检。安装路径精确输入 `YES` 选择系统标准目录，其它输入或回车选择用户目录；失败停止，不自动改换路线。新系统缺少 Command Line Tools 时按系统提示完成安装后重试。
 
@@ -243,7 +268,7 @@ Uploads/
 
 * `LANFileServer/LANFileServer.py` 是源码入口，`lanfileserver/` 保存共享服务与界面模块；`scripts/` 管理产物快捷方式，`tests/` 保存回归用例。
 
-### [启动LANFileServer.command](./LANFileServer/启动LANFileServer.command)
+### <span id="jobs-toc-heading-17" data-jobs-toc="v2">[启动LANFileServer.command](./LANFileServer/启动LANFileServer.command)</span><!-- jobs-toc:heading-end -->
 
 > **目的：** 执行 LANFileServer 的 macOS 打包，或用 `run-app` 启动源码界面。
 
@@ -254,7 +279,7 @@ Uploads/
   * 当前 Python 不支持双架构构建：回退本机架构。
 * 封装 DMG、更新第一层快捷方式，打开构建时间目录并启动 APP；日志写入系统临时目录。
 
-### [启动LANFileServer.bat](./LANFileServer/启动LANFileServer.bat)
+### <span id="jobs-toc-heading-18" data-jobs-toc="v2">[启动LANFileServer.bat](./LANFileServer/启动LANFileServer.bat)</span><!-- jobs-toc:heading-end -->
 
 > **目的：** 在 Windows 准备 LANFileServer 环境，默认运行界面，按参数生成 EXE。
 

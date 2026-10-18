@@ -2,17 +2,31 @@
 
 ![Jobs出品，必属精品](https://picsum.photos/1500/400)
 
-[toc]
+<!-- jobs-toc:start -->
+<!-- jobs-toc:source {"v":2,"token":"[toc]"} -->
+<details>
+<summary>📚 目录（点击展开 / 收起）</summary>
+
+- [🔥 前言](#jobs-toc-heading-1)
+- [一、运行方式](#jobs-toc-heading-2)
+  - [1.1、macOS](#jobs-toc-heading-3)
+  - [1.2、Windows](#jobs-toc-heading-4)
+- [二、操作流程](#jobs-toc-heading-5)
+- [三、风险说明](#jobs-toc-heading-6)
+- [四、Mac Python 环境自检](#jobs-toc-heading-7)
+
+</details>
+<!-- jobs-toc:end -->
 
 ---
 
-## 🔥 <font id=前言>前言</font>
+## <span id="jobs-toc-heading-1" data-jobs-toc="v2">🔥 <font id=前言>前言</font></span><!-- jobs-toc:heading-end -->
 
 `LANFileServer` 是一个用 [**Python**](https://www.python.org) 写的局域网文件服务器小工具。左侧拖入要暴露的文件 / 文件夹，右侧查看访问记录；每张共享卡片都能独立勾选“临时”和“允许上传”。勾选“临时”时由 Python 流式传输，不勾选时由本机 [**Nginx**](https://nginx.org/) 使用 `alias + sendfile` 直接输出文件字节，浏览器页面和上传控制仍由仅监听本机的 Python 后端负责。
 
-## 一、运行方式 <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a>
+## <span id="jobs-toc-heading-2" data-jobs-toc="v2">一、运行方式 <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a></span><!-- jobs-toc:heading-end -->
 
-### 1.1、macOS <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a>
+### <span id="jobs-toc-heading-3" data-jobs-toc="v2">1.1、macOS <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a></span><!-- jobs-toc:heading-end -->
 
 - 双击外层脚本会生成 `LANFileServer-macOS-架构.dmg`：
 
@@ -25,7 +39,7 @@
 - 默认使用 [**Homebrew**](https://brew.sh/) 管理的 [**Python**](https://www.python.org) 创建项目虚拟环境，按当前 Mac 的 Intel 或 Apple Silicon 架构打包。
 - 第一次构建按所选 Python 下载兼容的 [**PySide6**](https://doc.qt.io/qtforpython-6/) 依赖，后续复用健康环境；Brew Python 不具备双架构时明确使用本机架构。
 
-### 1.2、Windows <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a>
+### <span id="jobs-toc-heading-4" data-jobs-toc="v2">1.2、Windows <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a></span><!-- jobs-toc:heading-end -->
 
 - 双击外层脚本即可：
 
@@ -35,7 +49,7 @@
 
 - 它会自动转到内部项目，创建或复用 `.venv`，安装缺失依赖，然后启动图形界面。
 
-## 二、操作流程 <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a>
+## <span id="jobs-toc-heading-5" data-jobs-toc="v2">二、操作流程 <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a></span><!-- jobs-toc:heading-end -->
 
 1. 拖入文件或文件夹到左侧列表，也可以点“添加文件 / 添加文件夹”。
 2. 在每张共享卡片上独立选择模式：勾选“临时”使用 Python HTTP 服务，取消勾选使用 Nginx。
@@ -68,7 +82,7 @@
 - macOS 点击黄色最小化按钮后，主窗口会隐藏并驻留系统顶部菜单栏；点击图标可恢复窗口，菜单可停止服务并退出。
 - 如果关闭窗口时仍有服务运行，程序会询问是否驻留到顶部菜单栏继续运行；选择“停止服务并退出”才会关闭所有共享服务。
 
-## 三、风险说明 <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a>
+## <span id="jobs-toc-heading-6" data-jobs-toc="v2">三、风险说明 <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a></span><!-- jobs-toc:heading-end -->
 
 - 这个工具会把左侧列表里的文件 / 文件夹暴露给同一局域网内能访问该端口的设备。
 - 不建议把隐私目录、系统目录、浏览器数据目录、密码文件拖入共享列表。
@@ -85,7 +99,7 @@
 构建产物使用本机本地构建时间，格式为 `YYYY.MM.DD HH-mm-ss`（年月日时分秒），例如 `2020.06.04 12-23-21`。每次构建的 APP、DMG、EXE、ZIP 和配套文件统一保存到交付层 `../dist/YYYY.MM.DD HH-mm-ss/`，同次构建只取一次时间；第一层快捷方式指向本次时间目录，成功后打开该目录并启动其中的软件。旧产物沿用原有清理规则；历史产物缺少可靠构建时间时，不补写推测时间。
 
 
-## 四、Mac Python 环境自检 <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a>
+## <span id="jobs-toc-heading-7" data-jobs-toc="v2">四、Mac Python 环境自检 <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a></span><!-- jobs-toc:heading-end -->
 
 实际使用 Python 的 Mac 入口通过脚本内部的具名函数执行环境自检，完整自检实现随该脚本携带。先阅读自述并确认，再自检 [**Homebrew**](https://brew.sh/)：已有安装执行 `brew update`，只更新自身和配方索引，不全量升级其它软件；缺少时安装并复检。安装路径精确输入 `YES` 选择系统标准目录，其它输入或回车选择用户目录；失败停止，不自动改换路线。新系统缺少 Command Line Tools 时按系统提示完成安装后重试。
 
