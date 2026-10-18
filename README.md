@@ -50,7 +50,15 @@
 
 ## 二、运行方式 <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a>
 
-### 2.1、macOS <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a>
+### [【MacOS】📦生成dmg.command](./【MacOS】📦生成dmg.command)
+
+> **目的：** 从外层目录一键生成 LANFileServer 的 macOS APP / DMG。
+
+* 显示用途，按脚本位置查找内层 `启动LANFileServer.command` 并检查执行权限。
+  * 启动器缺失或不可执行：报告路径并停止。
+* 以 `build-dmg` 参数调用内层启动器，将输出目录指定为本仓外层。
+* 内层完成环境确认、旧产物清理、APP / DMG 生成及成品启动，外层返回其结果。
+
 
 - 双击外层脚本：
 
@@ -73,7 +81,15 @@
 - 黑色终端窗口是打包窗口。看到 `DMG 已生成` 后，可以关闭这个窗口。
 - `.dmg` 可以直接打开运行里面的 App，也可以把 App 拖入系统 `Applications` 文件夹。
 
-### 2.2、Windows <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a>
+### [【Windows】📦生成exe.bat](./【Windows】📦生成exe.bat)
+
+> **目的：** 从外层目录生成 LANFileServer 的 Windows EXE。
+
+* 按脚本位置定位 `LANFileServer/启动LANFileServer.bat`。
+  * 找不到启动器：显示错误并停止。
+* 以 `build-exe` 参数转交内层启动器，由它准备依赖并清理外层旧 `dist/`。
+* 构建成功后打开目录并启动新 EXE，外层返回相同退出码。
+
 
 - 双击外层脚本：
 
@@ -198,5 +214,54 @@ Uploads/
 实际使用 Python 的 Mac 入口通过脚本内部的具名函数执行环境自检，完整自检实现随该脚本携带。先阅读自述并确认，再自检 [**Homebrew**](https://brew.sh/)：已有安装执行 `brew update`，只更新自身和配方索引，不全量升级其它软件；缺少时安装并复检。安装路径精确输入 `YES` 选择系统标准目录，其它输入或回车选择用户目录；失败停止，不自动改换路线。新系统缺少 Command Line Tools 时按系统提示完成安装后重试。
 
 [**Python**](https://www.python.org) 使用 Homebrew 配方；实际版本和标准库满足工具要求时复用，不兼容时才安装 / 升级并复检。必需修复直接回车执行，任意非空输入（含空格）、EOF 或非交互缺失环境均停止。旧虚拟环境不兼容时完整改名备份后重建，保留备份。Homebrew 安装路径选择、更新、Python 版本与健康检查均封装在实际执行脚本内部，不依赖外部环境支持库、同步脚本或父仓文件。Windows 入口保持原有平台环境流程；运行已打包成品无需准备构建环境。
+
+## 八、<span id="repository-layout-and-entrypoints">本仓目录与脚本入口</span> <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a>
+
+以下为当前检出的源码与维护入口；依赖环境、Git 元数据、构建缓存和生成产物略去，独立子仓仅列目录。
+
+```text
+.
+├── .gitignore
+├── 【MacOS】📦生成dmg.command
+├── 【Windows】📦生成exe.bat
+├── assets/
+├── icon.png
+├── LANFileServer/
+│   ├── lanfileserver/
+│   ├── LANFileServer.py
+│   ├── LANFileServer.spec
+│   ├── pyproject.toml
+│   ├── README.md
+│   ├── requirements-build.txt
+│   ├── requirements.txt
+│   ├── scripts/
+│   ├── tests/
+│   ├── 启动LANFileServer.bat
+│   └── 启动LANFileServer.command
+└── README.md
+```
+
+* `LANFileServer/LANFileServer.py` 是源码入口，`lanfileserver/` 保存共享服务与界面模块；`scripts/` 管理产物快捷方式，`tests/` 保存回归用例。
+
+### [启动LANFileServer.command](./LANFileServer/启动LANFileServer.command)
+
+> **目的：** 执行 LANFileServer 的 macOS 打包，或用 `run-app` 启动源码界面。
+
+* 显示自述，确认 Homebrew / Python 环境准备，定位内层源码和依赖文件。
+* 默认进入 `build-dmg`；创建或复用虚拟环境，检查构建依赖与入口语法。
+  * 依赖缺失：回车安装，任意非空输入取消；`run-app` 只准备运行依赖并启动源码。
+* 打包模式清理外层旧 `dist/`，优先生成 universal2 APP。
+  * 当前 Python 不支持双架构构建：回退本机架构。
+* 封装 DMG、更新第一层快捷方式，打开构建时间目录并启动 APP；日志写入系统临时目录。
+
+### [启动LANFileServer.bat](./LANFileServer/启动LANFileServer.bat)
+
+> **目的：** 在 Windows 准备 LANFileServer 环境，默认运行界面，按参数生成 EXE。
+
+* 显示自述，查找 Python，检查入口与依赖文件，创建或复用 `.venv/`。
+  * Python 缺失时停止；依赖缺失时回车安装，任意非空输入取消。
+* 没有 `build-exe` 参数时，检查源码语法并启动界面。
+* 传入 `build-exe` 时检查打包依赖，清理外层旧 `dist/`，生成单文件 EXE。
+* 构建成功后更新快捷方式、打开产物目录并启动 EXE；失败时暂停显示错误与日志位置。
 
 <a id="🔚" href="#前言" style="font-size:17px; color:green; font-weight:bold;">我是有底线的➤点我回到首页</a>
