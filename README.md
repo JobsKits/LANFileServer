@@ -33,13 +33,23 @@
 
 ## <span id="jobs-toc-heading-1" data-jobs-toc="v2">🔥 <font id=前言>前言</font></span><!-- jobs-toc:heading-end -->
 
+`LANFileServer` 将本机文件和文件夹共享给同一局域网中的浏览器，提供下载、预览、可选上传和独立聊天室；桌面窗口管理共享项目与访问记录，手机无需安装客户端。
+
+| 功能 | 默认值与操作边界 |
+| --- | --- |
+| 共享项目 | 拖入文件 / 文件夹，逐项启动、停止、移除、排序、复制 URL 或在浏览器打开；默认端口 `8080`，可选 `1–65535`。 |
+| 临时模式 | 新项目默认临时，由 [**Python**](https://www.python.org/) 流式传输；文件支持 `Range`、断点续传和音视频拖动。 |
+| 非临时模式 | 取消“临时”后由本机 [**Nginx**](https://nginx.org/) 发送文件，Python 提供网页和上传控制；缺少 Nginx 时准备依赖。 |
+| 预览与下载 | 点击文件名查看，单文件保留原始字节，文件夹下载生成 ZIP；图片缩放 / 翻页，HEIC / HEIF 提供 JPEG 预览。 |
+| 上传与删除 | 默认关闭，仅文件夹可启用；分块上传写入该共享目录的 `Uploads/`，重名自动改名；网页删除只作用于其中普通文件，需二次确认。 |
+| 浏览器操作 | 搜索与排序、文件 / 文件夹拖放、粘贴截图、上传进度和速度、链接复制、二维码与系统分享。 |
+| 聊天与日志 | 每个项目有独立聊天室，每 3 秒增量刷新，进程内保留最近 200 条；桌面记录访问时间、来源 IP、服务引擎、状态码与路径。 |
+
+开放端口后，可访问该地址的设备即可使用对应共享能力；仅向可信局域网开放。操作细节见下方“使用说明”，内层工程入口见 [项目说明](./LANFileServer/README.md)。
+
 ![image-20260628150158033](./assets/image-20260628150158033.png)
 
 ![image-20260628150221966](./assets/image-20260628150221966.png)
-
-
-
-
 
 ## <span id="jobs-toc-heading-2" data-jobs-toc="v2">一、目录结构 <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a></span><!-- jobs-toc:heading-end -->
 
@@ -71,7 +81,7 @@
 - `./【MacOS】📦生成dmg.command`：macOS 外层入口，双击后转交给 `./LANFileServer/启动LANFileServer.command`，并生成 `./dist/YYYY.MM.DD HH-mm-ss/LANFileServer-macOS-<本机架构>.dmg`。
 - `./【Windows】📦生成exe.bat`：Windows 外层入口，双击后转交给 `./LANFileServer/启动LANFileServer.bat`。
 - `./dist/YYYY.MM.DD HH-mm-ss/LANFileServer-macOS-<本机架构>.dmg`：macOS 可分发安装包，按构建机的 Intel 或 Apple Silicon 架构生成。
-- `./LANFileServer/`：内部项目目录，保存源码、依赖、构建脚本和项目级 README；`.app` 与安装包保存到外层时间目录。
+- [内层工程](./LANFileServer/README.md)：保存源码、依赖、构建脚本和项目级说明；`.app` 与安装包保存到外层时间目录。
 
 ## <span id="jobs-toc-heading-3" data-jobs-toc="v2">二、运行方式 <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a></span><!-- jobs-toc:heading-end -->
 
@@ -83,7 +93,6 @@
   * 启动器缺失或不可执行：报告路径并停止。
 * 以 `build-dmg` 参数调用内层启动器，将输出目录指定为本仓外层。
 * 内层完成环境确认、旧产物清理、APP / DMG 生成及成品启动，外层返回其结果。
-
 
 - 双击外层脚本：
 
@@ -115,7 +124,6 @@
 * 以 `build-exe` 参数转交内层启动器，由它准备依赖并清理外层旧 `dist/`。
 * 构建成功后打开目录并启动新 EXE，外层返回相同退出码。
 
-
 - 双击外层脚本：
 
   ```text
@@ -132,13 +140,13 @@
 
 ## <span id="jobs-toc-heading-6" data-jobs-toc="v2">三、使用说明 <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a></span><!-- jobs-toc:heading-end -->
 
-1. 打开 `LANFileServer`。
-2. 把要暴露给局域网其它设备访问的文件或文件夹拖入左侧列表。
-3. 每个项目都可以单独选择“临时（Python）”或“非临时（Nginx）”。
-4. 文件夹项目可以按需勾选“允许上传”；对方浏览器上传的文件只会写入该共享文件夹下的 `Uploads/` 子目录。
-5. 选中左侧项目，点击顶部启动按钮。
-6. 把顶部蓝色访问地址发送给同一局域网内的其它电脑或手机。
-7. 右侧访问记录会显示访问时间、访问人 IP、服务引擎、状态码、对象和路径。
+1、打开 `LANFileServer`。
+2、把要暴露给局域网其它设备访问的文件或文件夹拖入左侧列表。
+3、每个项目都可以单独选择“临时（Python）”或“非临时（Nginx）”。
+4、文件夹项目可以按需勾选“允许上传”；对方浏览器上传的文件只会写入该共享文件夹下的 `Uploads/` 子目录。
+5、选中左侧项目，点击顶部启动按钮。
+6、把顶部蓝色访问地址发送给同一局域网内的其它电脑或手机。
+7、右侧访问记录会显示访问时间、访问人 IP、服务引擎、状态码、对象和路径。
 
 - 浏览器目录页里点击文件名或文件夹名默认查看；需要下载时点击右侧“下载”。
 - 文件下载直接返回原文件，支持 HTTP `Range`、断点续传和音视频拖动；只有文件夹下载才会生成 `主体名.zip`。
@@ -208,10 +216,10 @@ chmod +x ./LANFileServer/启动LANFileServer.command
 
 检查几件事：
 
-1. 对方设备和本机是否在同一个局域网。
-2. 本机防火墙是否拦截当前端口。
-3. 发送给对方的是否是蓝色项目地址，而不是只到端口首页的地址。
-4. 服务是否已经启动，左侧项目是否显示已启动。
+1、对方设备和本机是否在同一个局域网。
+2、本机防火墙是否拦截当前端口。
+3、发送给对方的是否是蓝色项目地址，而不是只到端口首页的地址。
+4、服务是否已经启动，左侧项目是否显示已启动。
 
 ### <span id="jobs-toc-heading-14" data-jobs-toc="v2">6.5、上传的文件在哪里 <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a></span><!-- jobs-toc:heading-end -->
 
@@ -232,7 +240,6 @@ Uploads/
 第一层交付目录与平台打包脚本同层保存 `dist/`，以及最新 APP / DMG 的相对符号链接（Mac）或 EXE / 分发包的 `.lnk`（Windows）。双击快捷方式即可接触成品，真实文件保留在 `dist/`；成功构建自动更新入口，清理旧产物时移除对应旧入口。尚无成品时不生成无效快捷方式。
 
 构建产物使用本机本地构建时间，格式为 `YYYY.MM.DD HH-mm-ss`（年月日时分秒），例如 `2020.06.04 12-23-21`。每次构建的 APP、DMG、EXE、ZIP 和配套文件统一保存到交付层 `./dist/YYYY.MM.DD HH-mm-ss/`，同次构建只取一次时间；第一层快捷方式指向本次时间目录，成功后打开该目录并启动其中的软件。旧产物沿用原有清理规则；历史产物缺少可靠构建时间时，不补写推测时间。
-
 
 ## <span id="jobs-toc-heading-15" data-jobs-toc="v2">七、Mac Python 环境自检 <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a></span><!-- jobs-toc:heading-end -->
 

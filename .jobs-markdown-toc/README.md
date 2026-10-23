@@ -43,6 +43,15 @@ node ./MarkdownToc.mjs install
 node ./MarkdownToc.mjs status
 ```
 
+已配置同名全局驱动的电脑无需再执行仓内 `install`；`status` 会显示实际生效的配置来源。已有折叠目录可直接恢复，正文和原始暂存内容保留：
+
+```shell
+node ./MarkdownToc.mjs restore
+node ./MarkdownToc.mjs verify
+```
+
+`verify` 同时检查本地文件是否已恢复 `[toc]`；恢复仅刷新内容匹配的索引状态缓存，不替换暂存版本。
+
 安装只配置本仓 `filter.jobs-markdown-toc.clean / smudge / required`，核对清单和有效 Git 属性，不改全局配置、hooks、分支或真实暂存区。安装会更新受控文档的修改时间，让 Git 重新检测新过滤器；未生成过目录的文档正文保持原样。恢复记录保存在本仓实际 Git 元数据目录中的 `jobs-markdown-toc.json`。
 
 ### 2.1、<span id="first-adoption">仓库首次接入与首次提交</span> <a href="#前言" style="font-size:17px; color:green;"><b>🔼</b></a> <a href="#🔚" style="font-size:17px; color:green;"><b>🔽</b></a>
@@ -96,22 +105,5 @@ node ./MarkdownToc.mjs uninstall
 代码围栏、缩进代码、注释中的 `[toc]` 不触发转换；标签大小写及合法多个目录位置原样保留。缺失锚点或旧 HTML 锚点不可靠时，发布形态增加可逆的非空 `span` 标题包装，检出会完整还原。转换不重新渲染正文，保留 BOM、换行和末尾换行；非法 UTF-8、损坏的生成标记、符号链接及跨仓清单会停止。
 
 折叠语法依据 [**GitHub 官方文档**](https://docs.github.com/en/get-started/writing-on-github/working-with-advanced-formatting/organizing-information-with-collapsed-sections)及 [**GitLab 官方文档**](https://docs.gitlab.com/user/markdown/#collapsible-section)；[**Gitee**](https://gitee.com)和自建服务需按实际渲染效果验收，不能将本地预览当作所有平台已验证。
-
-<!-- jobs-markdown-toc:upgrade-2026-10:start -->
-> **目录处理标准（2026-10）：** 本地工作文件保留 `[toc]`；整文件暂存生成按标题层级缩进、默认收起的发布目录，正常提交推送后供远端展示。
-
-旧版说明中的安装与检查细节以本补充为准：以下命令在本目录执行。`install` 安全恢复当前文档并登记本仓驱动；`restore` 只还原当前工作文件，保留正文改动、原始暂存内容与用户 flags；两者只允许对 clean 后等于原有 OID 的普通路径刷新索引 stat 缓存。`verify` 严格只读核对本地标签形态及字节往返，`check` 独立检查清单内原始暂存版本。
-
-```shell
-node ./MarkdownToc.mjs install
-node ./MarkdownToc.mjs restore
-node ./MarkdownToc.mjs verify
-node ./MarkdownToc.mjs status
-node ./MarkdownToc.mjs check
-node ./MarkdownToc.mjs preview
-```
-
-已授权范围的本机条件注册由 Skills 的 `jobs-markdown-docs/scripts/register-markdown-toc.mjs` 基于审核清单执行；可信转换副本在用户数据目录，首次检出不运行下载仓库脚本。目标仓运行不依赖 Skills；未注册机器审查后运行本仓 `install`。机器注册与仓内安装分别撤回，`uninstall` 仅恢复仓内配置。`fetch` 或无更新的 `pull` 不重写旧文件；已有生成态使用 `restore`，不能用强制检出覆盖本地改动。
-<!-- jobs-markdown-toc:upgrade-2026-10:end -->
 
 <a id="🔚" href="#前言">我是有底线的➤点我回到首页</a>
