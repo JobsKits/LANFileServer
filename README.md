@@ -33,7 +33,15 @@
 
 ## <span id="jobs-toc-heading-1" data-jobs-toc="v2">🔥 <font id=前言>前言</font></span><!-- jobs-toc:heading-end -->
 
+**最低支持系统：[Windows](https://www.microsoft.com/windows) 10 64 位（x64）。** 这是当前最低支持目标；具体最低 build 尚未锁定，完整实机兼容性仍待验证。
+
 `LANFileServer` 将本机文件和文件夹共享给同一局域网中的浏览器，提供下载、预览、可选上传和独立聊天室；桌面窗口管理共享项目与访问记录，手机无需安装客户端。
+
+[**Windows**](https://www.microsoft.com/windows) **兼容范围：当前构建与成品测试目标为 Windows 10 / 11 x64；Windows XP、Vista、7、8、8.1 不支持当前图形依赖。** [**Qt 6.8 官方 Windows 平台表**](https://doc.qt.io/qt-6.8/windows.html)列出的 x64 基线为 Windows 10 1809+ / Windows 11；本项目未锁定具体运行库版本，不能据此承诺每次构建都兼容同一最低系统版本。
+
+成品已包含 [**Python**](https://www.python.org) 与图形依赖，运行成品无需另外安装 Python；源码运行和打包才需要开发依赖。EXE 架构随构建所用 Python 和依赖 wheel 决定，x86 / ARM64 尚无统一交付验收；Windows 原生界面与分发仍须在对应目标机验证。
+
+[项目配置](./LANFileServer/pyproject.toml)声明 `Python>=3.9`、`PySide6>=6.7`，打包另需 `PyInstaller>=6.8`；这些版本仅设下限，Python 的最低版本不能代替 GUI 的系统要求。Windows 当前生成单文件 EXE，成品内置运行时。
 
 | 功能 | 默认值与操作边界 |
 | --- | --- |

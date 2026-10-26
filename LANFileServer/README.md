@@ -22,7 +22,15 @@
 
 ## <span id="jobs-toc-heading-1" data-jobs-toc="v2">🔥 <font id=前言>前言</font></span><!-- jobs-toc:heading-end -->
 
+**最低支持系统：[Windows](https://www.microsoft.com/windows) 10 64 位（x64）。** 这是当前最低支持目标；具体最低 build 尚未锁定，完整实机兼容性仍待验证。
+
 `LANFileServer` 是一个用 [**Python**](https://www.python.org) 写的局域网文件服务器小工具。左侧拖入要暴露的文件 / 文件夹，右侧查看访问记录；每张共享卡片都能独立勾选“临时”和“允许上传”。勾选“临时”时由 Python 流式传输，不勾选时由本机 [**Nginx**](https://nginx.org/) 使用 `alias + sendfile` 直接输出文件字节，浏览器页面和上传控制仍由仅监听本机的 Python 后端负责。
+
+[**Windows**](https://www.microsoft.com/windows) **兼容范围：当前构建与成品测试目标为 Windows 10 / 11 x64；Windows XP、Vista、7、8、8.1 不支持当前图形依赖。** [**Qt 6.8 官方 Windows 平台表**](https://doc.qt.io/qt-6.8/windows.html)列出的 x64 基线为 Windows 10 1809+ / Windows 11；本项目未锁定具体运行库版本，不能据此承诺每次构建都兼容同一最低系统版本。
+
+成品已包含 [**Python**](https://www.python.org) 与图形依赖，运行成品无需另外安装 Python；源码运行和打包才需要开发依赖。EXE 架构随构建所用 Python 和依赖 wheel 决定，x86 / ARM64 尚无统一交付验收；Windows 原生界面与分发仍须在对应目标机验证。
+
+[项目配置](./pyproject.toml)声明 `Python>=3.9`、`PySide6>=6.7`，打包另需 `PyInstaller>=6.8`；这些版本仅设下限，Python 的最低版本不能代替 GUI 的系统要求。Windows 当前生成单文件 EXE，成品内置运行时；平台交付说明见[外层总说明](../README.md)。
 
 本目录保存启动器、依赖和 `lanfileserver/` 业务源码。完整功能、网页预览 / 上传 / 聊天操作和平台打包入口统一见 [外层总说明](../README.md)；新共享默认临时、关闭上传，界面端口默认 `8080`。
 

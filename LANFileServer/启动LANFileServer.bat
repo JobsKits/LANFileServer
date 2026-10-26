@@ -1,6 +1,6 @@
 @echo off
 chcp 65001 >nul
-setlocal EnableExtensions
+setlocal EnableExtensions DisableDelayedExpansion
 
 rem 脚本自述：
 rem - 脚本名称：启动LANFileServer.bat

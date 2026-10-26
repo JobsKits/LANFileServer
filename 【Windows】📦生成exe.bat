@@ -1,6 +1,6 @@
 @echo off
 chcp 65001 >nul
-setlocal EnableExtensions
+setlocal EnableExtensions DisableDelayedExpansion
 
 set "SCRIPT_DIR=%~dp0"
 set "PROJECT_LAUNCHER=%SCRIPT_DIR%LANFileServer\启动LANFileServer.bat"
