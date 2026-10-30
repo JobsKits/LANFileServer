@@ -1,6 +1,8 @@
 @echo off
 chcp 65001 >nul
 setlocal EnableExtensions DisableDelayedExpansion
+set "PYTHONUTF8=1"
+set "PYTHONIOENCODING=utf-8"
 
 rem 脚本自述：
 rem - 脚本名称：启动LANFileServer.bat
@@ -168,7 +170,9 @@ for /f "delims=" %%T in ('powershell -NoProfile -Command "Get-Date -Format 'yyyy
 if not defined BUILD_STAMP (popd & exit /b 1)
 set "DIST_DIR=%DIST_ROOT%\%BUILD_STAMP%"
 echo Build time (YYYY.MM.DD HH-mm-ss): %BUILD_STAMP%
-"%PYTHON_BIN%" -m PyInstaller --noconfirm --clean --distpath "%DIST_DIR%" --windowed --onefile --name "%APP_NAME%" "%ENTRY_FILE%" >> "%LOG_FILE%" 2>&1
+if not exist "%PROJECT_DIR%\build\pyinstaller-spec" mkdir "%PROJECT_DIR%\build\pyinstaller-spec"
+if not exist "%PROJECT_DIR%\build\pyinstaller-spec" (popd & exit /b 1)
+"%PYTHON_BIN%" -m PyInstaller --noconfirm --clean --specpath "%PROJECT_DIR%\build\pyinstaller-spec" --distpath "%DIST_DIR%" --windowed --onefile --name "%APP_NAME%" "%ENTRY_FILE%" >> "%LOG_FILE%" 2>&1
 set "BUILD_EXIT=%ERRORLEVEL%"
 if "%BUILD_EXIT%"=="0" (
     if not exist "%DIST_DIR%\%APP_NAME%.exe" (popd & exit /b 1)

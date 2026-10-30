@@ -1,6 +1,8 @@
 @echo off
 chcp 65001 >nul
 setlocal EnableExtensions DisableDelayedExpansion
+set "PYTHONUTF8=1"
+set "PYTHONIOENCODING=utf-8"
 
 set "SCRIPT_DIR=%~dp0"
 set "PROJECT_LAUNCHER=%SCRIPT_DIR%LANFileServer\启动LANFileServer.bat"

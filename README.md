@@ -102,6 +102,10 @@
 * 以 `build-dmg` 参数调用内层启动器，将输出目录指定为本仓外层。
 * 内层完成环境确认、旧产物清理、APP / DMG 生成及成品启动，外层返回其结果。
 
+项目可以整体复制或改名；外层入口只按自身位置查找内层启动器，缺失时显示实际查找路径。构建配置 [LANFileServer.spec](./LANFileServer/LANFileServer.spec) 按自身目录定位源码与图标。生成 App 的图标随包携带，运行时按包内资源读取；分享 App 无需保留开发机目录，目标 Mac 的架构、系统与运行验证仍须单独核对。
+
+两端构建器生成的临时 PyInstaller 配置放在内层 `build/pyinstaller-spec/`，不会覆盖随源码维护的 `.spec` 配置。
+
 - 双击外层脚本：
 
   ```text

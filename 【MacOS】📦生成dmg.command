@@ -64,7 +64,6 @@ resolve_project_launcher() {
   local candidates=(
     "${SCRIPT_DIR}/LANFileServer/启动LANFileServer.command"
     "${SCRIPT_DIR}/../LANFileServer/启动LANFileServer.command"
-    "/Users/jobs/Desktop/LANFileServer/启动LANFileServer.command"
   )
   local candidate=""
   for candidate in "${candidates[@]}"; do
@@ -78,7 +77,7 @@ resolve_project_launcher() {
 # 检查项目内启动器是否存在并可执行。
 check_environment() {
   if ! resolve_project_launcher; then
-    error_echo "未找到项目启动器。请确认启动脚本旁边存在 LANFileServer 文件夹。"
+    error_echo "未找到项目启动器。已查找：${SCRIPT_DIR}/LANFileServer/启动LANFileServer.command、${SCRIPT_DIR}/../LANFileServer/启动LANFileServer.command"
     exit 1
   fi
   if [[ ! -x "${PROJECT_LAUNCHER}" ]]; then
